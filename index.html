@@ -1,9 +1,157 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#111"><meta name="apple-mobile-web-app-capable" content="yes"><title>Замер+</title><style>
-:root{--bg:#f5f5f2;--card:#fff;--text:#151515;--muted:#777;--line:#deded9;--accent:#c22f7a}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Arial,sans-serif;padding-bottom:90px}.app{max-width:760px;margin:auto}.top{position:sticky;top:0;z-index:4;padding:14px 18px;background:#f5f5f2e8;backdrop-filter:blur(18px);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #00000008}.brand{font-weight:900;font-size:21px}.pill{padding:7px 11px;border-radius:999px;background:#e6f4ec;color:#176b46;font-weight:800;font-size:12px}main{padding:16px}.view{display:none}.view.active{display:block}.hero{background:#111;color:white;padding:24px;border-radius:28px}.hero h1{font-size:34px;line-height:1.03;margin:8px 0 12px;letter-spacing:-.04em}.hero p{color:#ccc;line-height:1.45}.card{background:#fff;border:1px solid #00000009;border-radius:22px;padding:16px;margin-top:14px}.row{display:flex;justify-content:space-between;align-items:center;gap:10px}.small{font-size:13px;color:var(--muted)}button,input,textarea{font:inherit}button{border:0}.primary,.secondary{min-height:48px;border-radius:15px;padding:0 16px;font-weight:850}.primary{background:var(--accent);color:#fff}.secondary{background:#fff;border:1px solid var(--line)}.wide{width:100%}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}input,textarea{width:100%;border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff;min-height:48px}textarea{min-height:90px}.project{padding:12px 0;border-top:1px solid #eee}.project:first-child{border-top:0}.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);padding:8px 8px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(5,1fr);background:#fafaf8ee;backdrop-filter:blur(18px);border-top:1px solid #0000000b}.nav button{background:transparent;min-height:58px;border-radius:14px;color:#777;font-size:11px;font-weight:800}.nav button.active{background:#111;color:#fff}.notice{margin-top:14px;background:#fff;border-left:4px solid #b87316;border-radius:14px;padding:12px;line-height:1.45}.metric{font-size:28px;font-weight:900}.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:100px;background:#111;color:#fff;padding:12px 15px;border-radius:13px;opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1}@media(max-width:560px){.grid{grid-template-columns:1fr}}</style></head><body><div class="app"><header class="top"><div class="brand">З+ &nbsp;Замер+</div><span class="pill">HTTPS</span></header><main>
-<section id="objects" class="view active"><div class="hero"><div class="small" style="color:#aaa">IPHONE WEB TEST</div><h1>Замер+ работает<br>в Safari.</h1><p>Эта версия нужна для проверки интерактивного интерфейса. Создание объектов, навигация, размеры, заметки, JSON и экспорт работают прямо в браузере.</p><button class="primary" id="newBtn">+ Новый объект</button></div><div class="card"><div class="row"><div><b>Объекты</b><div class="small">хранятся на этом iPhone</div></div><span id="count" class="pill">0</span></div><div id="list"></div></div><div class="notice"><b>LiDAR и Bosch BLE:</b> веб‑страница Safari не может запустить RoomPlan/CoreBluetooth. В полной сборке эти кнопки подключаются через нативный мост.</div></section>
-<section id="measure" class="view"><h2>Замер</h2><div class="card"><div class="small">Текущий объект</div><h2 id="title">—</h2><label class="small">Размер Bosch, мм</label><input id="mm" inputmode="numeric" placeholder="3248"><button class="primary wide" id="addMm" style="margin-top:9px">Добавить размер</button><div id="hist" class="small" style="margin-top:12px"></div></div><div class="card"><label class="small">Заметки</label><textarea id="notes" placeholder="Розетки, трубы, вентканал…"></textarea></div><div class="grid"><button class="secondary" id="lidar">◫ LiDAR</button><button class="secondary" id="bosch">↔ Bosch Bluetooth</button></div></section>
-<section id="cloud" class="view"><h2>Яндекс Диск</h2><div class="card"><p class="small">Кнопка авторизации уже работает как обычная веб‑кнопка.</p><button class="primary wide" id="ya">Открыть Яндекс OAuth</button></div></section>
-<section id="export" class="view"><h2>SketchUp</h2><div class="card"><div class="small">Размеров в объекте</div><div id="mcount" class="metric">0</div><button class="primary wide" id="json" style="margin-top:12px">Скачать measurements.json</button></div></section>
-<section id="help" class="view"><h2>Помощь</h2><div class="card"><b>Проверка кнопок</b><p class="small">Если вы видите это после нажатия «Помощь», JavaScript работает правильно. Добавьте страницу на экран Домой через меню Safari.</p></div></section>
-</main><nav class="nav"><button data-v="objects" class="active">⌂<br>Объекты</button><button data-v="measure">⌗<br>Замер</button><button data-v="cloud">☁<br>Облако</button><button data-v="export">⇧<br>SketchUp</button><button data-v="help">?<br>Помощь</button></nav></div><div id="toast" class="toast"></div><script>
-const KEY='zamerplus.webtest.v1';let s=JSON.parse(localStorage.getItem(KEY)||'{"projects":[],"active":null}');const $=x=>document.querySelector(x),$$=x=>[...document.querySelectorAll(x)];function save(){localStorage.setItem(KEY,JSON.stringify(s));render()}function toast(t){let e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1800)}function cur(){return s.projects.find(p=>p.id===s.active)}function show(v){$$('.view').forEach(x=>x.classList.toggle('active',x.id===v));$$('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.v===v));render()}$$('.nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));$('#newBtn').onclick=()=>{let name=prompt('Название объекта','Кухня — новый замер');if(!name)return;let p={id:crypto.randomUUID?.()||Date.now().toString(),name,measurements:[],notes:'',updated:Date.now()};s.projects.unshift(p);s.active=p.id;save();show('measure')};$('#addMm').onclick=()=>{let p=cur(),v=Math.round(Number($('#mm').value));if(!p)return toast('Сначала создайте объект');if(!v)return toast('Введите размер');p.measurements.push(v);p.updated=Date.now();$('#mm').value='';save();toast(v+' мм добавлено')};$('#notes').oninput=e=>{let p=cur();if(p){p.notes=e.target.value;save()}};$('#lidar').onclick=()=>toast('LiDAR работает только в установленной iOS-сборке');$('#bosch').onclick=()=>toast('Прямой BLE Bosch работает только в установленной iOS-сборке');$('#ya').onclick=()=>window.open('https://oauth.yandex.ru/authorize?response_type=token&client_id=959b359c1a7543798753a7727ff72883&force_confirm=yes','_blank');$('#json').onclick=()=>{let p=cur();if(!p)return toast('Нет объекта');let a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(p,null,2)],{type:'application/json'}));a.href=u;a.download=(p.name||'zamer')+'_measurements.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};function render(){let p=cur();$('#count').textContent=s.projects.length;$('#list').innerHTML=s.projects.map(x=>'<div class="project" data-id="'+x.id+'"><b>'+x.name.replace(/[<>]/g,'')+'</b><div class="small">'+x.measurements.length+' размеров</div></div>').join('')||'<p class="small">Объектов пока нет.</p>';$$('.project').forEach(e=>e.onclick=()=>{s.active=e.dataset.id;save();show('measure')});$('#title').textContent=p?.name||'—';$('#notes').value=p?.notes||'';$('#hist').textContent=p?.measurements.length?'Последние: '+p.measurements.slice(-8).join(' · ')+' мм':'Размеров пока нет';$('#mcount').textContent=p?.measurements.length||0}render();</script></body></html>
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>Замер+</title>
+<script src="https://ioswebble.com/webble.js"></script>
+<style>
+:root{--bg:#f5f5f2;--card:#fff;--text:#151515;--muted:#777;--line:#deded9;--accent:#c22f7a;--green:#13754b;--red:#b3261e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Arial,sans-serif;padding-bottom:92px}
+.app{max-width:760px;margin:auto}.top{position:sticky;top:0;z-index:4;padding:14px 18px;background:#f5f5f2e8;backdrop-filter:blur(18px);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #00000008}
+.brand{font-weight:900;font-size:21px}.pill{padding:7px 11px;border-radius:999px;background:#eee;color:#555;font-weight:800;font-size:12px}.pill.good{background:#e6f4ec;color:var(--green)}.pill.bad{background:#fde8e6;color:var(--red)}
+main{padding:16px}.view{display:none}.view.active{display:block}.hero{background:#111;color:white;padding:24px;border-radius:28px}.hero h1{font-size:34px;line-height:1.03;margin:8px 0 12px;letter-spacing:-.04em}.hero p{color:#ccc;line-height:1.45}
+.card{background:#fff;border:1px solid #00000009;border-radius:22px;padding:16px;margin-top:14px}.row{display:flex;justify-content:space-between;align-items:center;gap:10px}.small{font-size:13px;color:var(--muted)}button,input,textarea{font:inherit}button{border:0}
+.primary,.secondary{min-height:48px;border-radius:15px;padding:0 16px;font-weight:850}.primary{background:var(--accent);color:#fff}.secondary{background:#fff;border:1px solid var(--line)}.wide{width:100%}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input,textarea{width:100%;border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff;min-height:48px}textarea{min-height:90px}
+.project{padding:12px 0;border-top:1px solid #eee}.project:first-child{border-top:0}.device{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center}.ico{width:48px;height:48px;border-radius:15px;background:#f0f0ed;display:grid;place-items:center;font-size:22px}.title{font-weight:900}.big{font-size:30px;font-weight:900}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(760px,100%);padding:8px 8px calc(8px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(4,1fr);background:#fafaf8ee;backdrop-filter:blur(18px);border-top:1px solid #0000000b}.nav button{background:transparent;min-height:58px;border-radius:14px;color:#777;font-size:11px;font-weight:800}.nav button.active{background:#111;color:#fff}
+.notice{margin-top:14px;background:#fff;border-left:4px solid #b87316;border-radius:14px;padding:12px;line-height:1.45}.notice.good{border-left-color:var(--green)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:105px;background:#111;color:#fff;padding:12px 15px;border-radius:13px;opacity:0;pointer-events:none;transition:.2s;max-width:90vw}.toast.show{opacity:1}
+@media(max-width:560px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body><div class="app">
+<header class="top"><div class="brand">З+ &nbsp;Замер+</div><span id="env" class="pill good">Safari</span></header>
+<main>
+<section id="objects" class="view active">
+<div class="hero"><div class="small" style="color:#aaa">IPHONE SAFARI · BOSCH BLE · LIDAR BRIDGE</div><h1>Замер+ в Safari.</h1><p>Bosch подключается через WebBLE‑расширение Safari. LiDAR кнопка готова к нативному RoomPlan‑bridge: без такого bridge Safari сам LiDAR не отдаёт.</p><button class="primary" id="newBtn">+ Новый объект</button></div>
+<div class="card"><div class="row"><div><b>Объекты</b><div class="small">хранятся на этом iPhone</div></div><span id="count" class="pill">0</span></div><div id="list"></div></div>
+</section>
+
+<section id="measure" class="view">
+<h2>Замер</h2>
+<div class="card"><div class="small">Текущий объект</div><h2 id="title">—</h2></div>
+
+<div class="grid">
+<div class="card">
+<div class="device"><div class="ico">↔</div><div><div class="title">Bosch GLM</div><div id="boschSub" class="small">Web Bluetooth</div></div><span id="boschStatus" class="pill">не подключён</span></div>
+<button class="primary wide" id="connectBosch" style="margin-top:12px">Подключить Bosch</button>
+<div style="margin-top:12px"><div class="small">Последнее измерение</div><div id="boschValue" class="big">—</div></div>
+<div class="notice" style="font-size:12px">На iPhone Safari нужен WebBLE extension. После включения расширение добавляет <code>navigator.bluetooth</code>.</div>
+</div>
+
+<div class="card">
+<div class="device"><div class="ico">◫</div><div><div class="title">LiDAR / RoomPlan</div><div id="lidarSub" class="small">Safari bridge</div></div><span id="lidarStatus" class="pill">ожидание</span></div>
+<button class="primary wide" id="startLidar" style="margin-top:12px">Сканировать LiDAR</button>
+<div id="lidarResult" class="small" style="margin-top:12px">LiDAR bridge не обнаружен.</div>
+<div class="notice" style="font-size:12px">Safari не имеет RoomPlan API. Кнопка работает только если на iPhone установлен наш native LiDAR bridge / Safari extension.</div>
+</div>
+</div>
+
+<div class="card">
+<label class="small">Ручной размер, мм</label><input id="mm" inputmode="numeric" placeholder="3248">
+<button class="secondary wide" id="addMm" style="margin-top:9px">Добавить вручную</button>
+<div id="hist" class="small" style="margin-top:12px"></div>
+</div>
+
+<div class="card"><label class="small">Заметки</label><textarea id="notes" placeholder="Розетки, трубы, вентканал…"></textarea></div>
+</section>
+
+<section id="export" class="view"><h2>Экспорт</h2><div class="card"><div class="small">Размеров</div><div id="mcount" class="big">0</div><button class="primary wide" id="json" style="margin-top:12px">Скачать measurements.json</button></div></section>
+
+<section id="help" class="view"><h2>Подключение</h2>
+<div class="card"><h3>Bosch через Safari</h3><p class="small">1. Установите и включите WebBLE Safari extension. 2. Разрешите расширению доступ к этому сайту. 3. Включите Bluetooth на GLM. 4. Нажмите «Подключить Bosch».</p></div>
+<div class="card"><h3>LiDAR через Safari</h3><p class="small">Прямого Web API для RoomPlan/LiDAR в Safari нет. Поэтому сайт уже поддерживает bridge‑события <code>zamerplus:lidar:start</code> / <code>zamerplus:lidar:result</code>. Их должен обслуживать нативный Safari‑helper.</p></div>
+</section>
+</main>
+<nav class="nav"><button data-v="objects" class="active">⌂<br>Объекты</button><button data-v="measure">⌗<br>Замер</button><button data-v="export">⇧<br>Экспорт</button><button data-v="help">?<br>Помощь</button></nav>
+</div><div id="toast" class="toast"></div>
+
+<script>
+const KEY='zamerplus.safari.v2';
+const BOSCH_SERVICE='02a6c0d0-0451-4000-b000-fb3210111989';
+const BOSCH_CHAR='02a6c0d1-0451-4000-b000-fb3210111989';
+const BOSCH_START=new Uint8Array([0xC0,0x55,0x02,0x01,0x00,0x1A]);
+let st=JSON.parse(localStorage.getItem(KEY)||'{"projects":[],"active":null}');
+let boschDevice=null,boschChar=null;
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+function save(){localStorage.setItem(KEY,JSON.stringify(st));render()}
+function toast(t){let e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
+function cur(){return st.projects.find(p=>p.id===st.active)}
+function show(v){$$('.view').forEach(x=>x.classList.toggle('active',x.id===v));$$('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.v===v));render();scrollTo(0,0)}
+$$('.nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
+$('#newBtn').onclick=()=>{let name=prompt('Название объекта','Кухня — новый замер');if(!name)return;let p={id:crypto.randomUUID?.()||Date.now().toString(),name,measurements:[],notes:'',lidar:null,updated:Date.now()};st.projects.unshift(p);st.active=p.id;save();show('measure')};
+function addMeasurement(mm,source='manual'){let p=cur();if(!p)return toast('Сначала создайте объект');mm=Math.round(Number(mm));if(!mm||mm<1)return;p.measurements.push({mm,source,ts:Date.now()});p.updated=Date.now();save();toast(mm+' мм добавлено')}
+$('#addMm').onclick=()=>{addMeasurement($('#mm').value,'manual');$('#mm').value=''};
+$('#notes').oninput=e=>{let p=cur();if(p){p.notes=e.target.value;p.updated=Date.now();localStorage.setItem(KEY,JSON.stringify(st))}};
+
+function setBoschStatus(text,ok=false){$('#boschStatus').textContent=text;$('#boschStatus').className='pill '+(ok?'good':'bad')}
+async function connectBosch(){
+  try{
+    if(!navigator.bluetooth){
+      setBoschStatus('нет WebBLE',false);
+      toast('В Safari нужно установить и включить WebBLE extension');
+      window.open('https://ioswebble.com/','_blank');
+      return;
+    }
+    setBoschStatus('поиск…');
+    boschDevice=await navigator.bluetooth.requestDevice({filters:[{services:[BOSCH_SERVICE]}],optionalServices:[BOSCH_SERVICE]});
+    boschDevice.addEventListener('gattserverdisconnected',()=>setBoschStatus('отключён',false));
+    const server=await boschDevice.gatt.connect();
+    const service=await server.getPrimaryService(BOSCH_SERVICE);
+    boschChar=await service.getCharacteristic(BOSCH_CHAR);
+    await boschChar.startNotifications();
+    boschChar.addEventListener('characteristicvaluechanged',onBoschValue);
+    try{await boschChar.writeValue(BOSCH_START)}catch(e){try{await boschChar.writeValueWithoutResponse(BOSCH_START)}catch(_){}}
+    setBoschStatus('подключён',true);$('#boschSub').textContent=boschDevice.name||'GLM';toast('Bosch подключён');
+  }catch(e){setBoschStatus('ошибка',false);toast(e.message||'Не удалось подключить Bosch')}
+}
+function onBoschValue(ev){
+  const dv=ev.target.value;
+  if(!dv||dv.byteLength<11)return;
+  const bytes=new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength);
+  if(bytes[0]!==0xC0||bytes[1]!==0x55)return;
+  let meters=dv.getFloat32(7,true);
+  if(!Number.isFinite(meters)||meters<=0||meters>250)return;
+  const mm=Math.round(meters*1000);
+  $('#boschValue').textContent=mm+' мм';
+  addMeasurement(mm,'bosch_ble');
+}
+$('#connectBosch').onclick=connectBosch;
+
+let lidarTimer=null;
+function bridgePresent(){return !!window.ZamerPlusLiDARBridge||document.documentElement.dataset.zamerplusLidarBridge==='1'}
+$('#startLidar').onclick=()=>{
+  let p=cur();if(!p)return toast('Сначала создайте объект');
+  $('#lidarStatus').textContent='запуск…';$('#lidarStatus').className='pill';
+  window.dispatchEvent(new CustomEvent('zamerplus:lidar:start',{detail:{projectId:p.id}}));
+  clearTimeout(lidarTimer);
+  lidarTimer=setTimeout(()=>{
+    if(!bridgePresent()){
+      $('#lidarStatus').textContent='нет bridge';$('#lidarStatus').className='pill bad';
+      $('#lidarResult').textContent='Safari не предоставляет LiDAR напрямую. Нужен native LiDAR bridge.';
+      toast('LiDAR bridge не установлен');
+    }
+  },1800);
+};
+window.addEventListener('zamerplus:lidar:ready',()=>{window.ZamerPlusLiDARBridge=true;$('#lidarStatus').textContent='готов';$('#lidarStatus').className='pill good';$('#lidarResult').textContent='Native RoomPlan bridge обнаружен.'});
+window.addEventListener('zamerplus:lidar:result',e=>{
+  clearTimeout(lidarTimer);window.ZamerPlusLiDARBridge=true;
+  let p=cur();if(!p)return;
+  p.lidar=e.detail||{};p.updated=Date.now();save();
+  const walls=p.lidar.walls?.length||0,doors=p.lidar.doors?.length||0,windows=p.lidar.windows?.length||0;
+  $('#lidarStatus').textContent='готов';$('#lidarStatus').className='pill good';
+  $('#lidarResult').textContent='LiDAR: '+walls+' стен, '+doors+' дверей, '+windows+' окон';
+  toast('LiDAR-скан получен');
+});
+$('#json').onclick=()=>{let p=cur();if(!p)return toast('Нет объекта');let a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(p,null,2)],{type:'application/json'}));a.href=u;a.download=(p.name||'zamer')+'_measurements.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+function render(){
+  let p=cur();$('#count').textContent=st.projects.length;
+  $('#list').innerHTML=st.projects.map(x=>'<div class="project" data-id="'+x.id+'"><b>'+x.name.replace(/[<>]/g,'')+'</b><div class="small">'+x.measurements.length+' размеров'+(x.lidar?' · LiDAR':'')+'</div></div>').join('')||'<p class="small">Объектов пока нет.</p>';
+  $$('.project').forEach(e=>e.onclick=()=>{st.active=e.dataset.id;save();show('measure')});
+  $('#title').textContent=p?.name||'—';$('#notes').value=p?.notes||'';
+  $('#hist').textContent=p?.measurements.length?'Последние: '+p.measurements.slice(-8).map(x=>x.mm).join(' · ')+' мм':'Размеров пока нет';
+  $('#mcount').textContent=p?.measurements.length||0;
+  if(p?.lidar){let l=p.lidar;$('#lidarResult').textContent='LiDAR: '+(l.walls?.length||0)+' стен';}
+}
+render();
+</script></body></html>
