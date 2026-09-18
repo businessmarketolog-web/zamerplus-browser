@@ -31,7 +31,7 @@ button{border:0;border-radius:17px;min-height:54px;padding:0 16px;font-size:17px
 .viewerHead{display:flex;align-items:center;gap:10px}.viewerHead h3{font-size:22px;margin:0;flex:1}.closeViewer{width:44px;height:44px;min-height:44px;border-radius:14px;background:#f0efec;font-size:24px}
 .viewerTabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.viewerTabs button{background:#f0efec;min-height:44px}.viewerTabs button.active{background:#111;color:#fff}
 .viewerCanvas{flex:1;min-height:320px;border:1px solid #e3e0db;border-radius:20px;background:#faf9f7;overflow:hidden}.viewerCanvas svg{width:100%;height:100%;touch-action:none}
-.viewerHint{color:#777;font-size:12px;margin-top:8px;text-align:center}
+.zoomControls{display:grid;grid-template-columns:54px 1fr 54px 74px;gap:8px;margin:0 0 10px}.zoomControls button{min-height:44px;background:#f0efec;font-size:20px}.zoomControls .zoomReset{font-size:14px}.zoomLabel{display:grid;place-items:center;background:#f6f5f2;border-radius:14px;font-size:14px;font-weight:900;color:#555}.zoomControls.hidden{display:none}.viewerHint{color:#777;font-size:12px;margin-top:8px;text-align:center}
 @media(max-width:520px){.manage{grid-template-columns:1fr}.viewer{padding:0}.viewerCard{height:88vh;border-radius:24px 24px 0 0}}
 
 @media(max-width:520px){.wrap{padding-left:14px;padding-right:14px}.card{padding:17px}.head h1{font-size:24px}.pageHead h2{font-size:27px}.actions{grid-template-columns:1fr}.actions button{min-height:52px}}
@@ -57,12 +57,12 @@ button{border:0;border-radius:17px;min-height:54px;padding:0 16px;font-size:17px
   <div class="note">Каждая комната хранит собственный LiDAR‑скан и экспортируется отдельной моделью .DAE.</div>
 </section>
 </main>
-<div id="viewer" class="viewer hidden"><div class="viewerCard"><div class="viewerHead"><h3 id="viewerTitle">LiDAR</h3><button id="closeViewer" class="closeViewer">×</button></div><div class="viewerTabs"><button data-viewmode="3d" class="active">3D</button><button data-viewmode="top">Сверху</button></div><div class="viewerCanvas"><svg id="viewerSvg" viewBox="0 0 420 420"></svg></div><div id="viewerHint" class="viewerHint">Проведите пальцем по модели, чтобы повернуть</div></div></div>
+<div id="viewer" class="viewer hidden"><div class="viewerCard"><div class="viewerHead"><h3 id="viewerTitle">LiDAR</h3><button id="closeViewer" class="closeViewer">×</button></div><div class="viewerTabs"><button data-viewmode="3d" class="active">3D</button><button data-viewmode="top">Сверху</button></div><div id="zoomControls" class="zoomControls"><button id="zoomOut" aria-label="Отдалить">−</button><div id="zoomLabel" class="zoomLabel">100%</div><button id="zoomIn" aria-label="Приблизить">+</button><button id="zoomReset" class="zoomReset">100%</button></div><div class="viewerCanvas"><svg id="viewerSvg" viewBox="0 0 420 420"></svg></div><div id="viewerHint" class="viewerHint">Проведите пальцем по модели, чтобы повернуть</div></div></div>
 <div id="toast" class="toast"></div>
 <script>
 const STORE='zamerplus_projects_v1',OLD_STORE='zamerplus_lidar_only_v1';
 let state={projects:[],activeProjectId:null};
-let viewer={projectId:null,roomId:null,scan:null,mode:'3d',yaw:38,pitch:28,drag:null};
+let viewer={projectId:null,roomId:null,scan:null,mode:'3d',yaw:38,pitch:28,zoom:1,drag:null,pointers:{},pinch:null};
 
 const $=q=>document.querySelector(q);
 function toast(s){let e=$('#toast');e.textContent=s;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),2500)}
@@ -328,7 +328,7 @@ function buildDAE(scan){
 
 function openViewer(projectId,roomId){
   let r=roomByIds(projectId,roomId);if(!r?.scan?.walls?.length)return toast('Скан отсутствует');
-  viewer.projectId=projectId;viewer.roomId=roomId;viewer.scan=r.scan;viewer.mode='3d';viewer.yaw=38;viewer.pitch=28;viewer.drag=null;
+  viewer.projectId=projectId;viewer.roomId=roomId;viewer.scan=r.scan;viewer.mode='3d';viewer.yaw=38;viewer.pitch=28;viewer.zoom=1;viewer.drag=null;viewer.pointers={};viewer.pinch=null;
   $('#viewerTitle').textContent=r.name+' · LiDAR';
   $('#viewer').classList.remove('hidden');
   document.body.style.overflow='hidden';
@@ -353,7 +353,7 @@ function projectViewer3D(x,y,z,cx,cy,scale){
 function renderViewer(){
   let scan=viewer.scan,svg=$('#viewerSvg');if(!scan||!svg)return;
   let tr=axisTransform(scan),b=viewerBounds(scan,tr),cx=(b.minx+b.maxx)/2,cy=(b.miny+b.maxy)/2,H=Math.max(...scan.walls.map(w=>Number(w.heightMm)||Number(scan.heightMm)||2700),1);
-  if(viewer.mode==='top'){
+  if(viewer.mode==='top'){$('#zoomControls').classList.add('hidden');
     let scale=Math.min(350/Math.max(1,b.maxx-b.minx),330/Math.max(1,b.maxy-b.miny)),ox=35-b.minx*scale,oy=385+b.miny*scale;
     let h='<rect width="420" height="420" fill="#faf9f7"/>';
     let poly=(scan.floorPolygon||[]).map(q=>tr.point(Number(q.xMm)||0,Number(q.zMm)||0));
@@ -370,7 +370,7 @@ function renderViewer(){
     });
     svg.innerHTML=h;$('#viewerHint').textContent='Вид сверху · размеры стен RoomPlan';return;
   }
-  let range=Math.max(b.maxx-b.minx,b.maxy-b.miny,H*.9,1),scale=155/range,h='<rect width="420" height="420" fill="#faf9f7"/>';
+  let range=Math.max(b.maxx-b.minx,b.maxy-b.miny,H*.9,1),scale=(155/range)*viewer.zoom,h='<rect width="420" height="420" fill="#faf9f7"/>';$('#zoomControls').classList.remove('hidden');$('#zoomLabel').textContent=Math.round(viewer.zoom*100)+'%';
   let floor=(scan.floorPolygon||[]).map(q=>{let p=tr.point(Number(q.xMm)||0,Number(q.zMm)||0);return projectViewer3D(p.x,p.y,0,cx,cy,scale)});
   if(floor.length>=3)h+='<polygon points="'+floor.map(q=>q.x+','+q.y).join(' ')+'" fill="#eeeae5" stroke="#bbb" stroke-width="1"/>';
   let walls=scan.walls.map((w,i)=>{let f=wallFrame(scan,w,tr),m={x:(f.a.x+f.b.x)/2,y:(f.a.y+f.b.y)/2},d=projectViewer3D(m.x,m.y,f.H/2,cx,cy,scale).depth;return{w,i,f,depth:d}}).sort((a,b)=>a.depth-b.depth);
@@ -388,14 +388,71 @@ function renderViewer(){
   h+='<text x="12" y="20" font-size="9" font-weight="800" fill="#777">Поворот '+Math.round(viewer.yaw%360)+'° · наклон '+Math.round(viewer.pitch)+'°</text>';
   svg.innerHTML=h;$('#viewerHint').textContent='Проведите пальцем по модели, чтобы повернуть';
 }
+function setViewerZoom(z){
+  viewer.zoom=Math.max(.5,Math.min(4,z));
+  $('#zoomLabel').textContent=Math.round(viewer.zoom*100)+'%';
+  if(viewer.mode==='3d')renderViewer();
+}
+function pointerDistance(){
+  let pts=Object.values(viewer.pointers);
+  if(pts.length<2)return 0;
+  return Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+}
 function bindViewer(){
   $('#closeViewer').onclick=closeViewer;
   $('#viewer').onclick=e=>{if(e.target.id==='viewer')closeViewer()};
-  $$('.viewerTabs [data-viewmode]').forEach(b=>b.onclick=()=>{viewer.mode=b.dataset.viewmode;$$('.viewerTabs [data-viewmode]').forEach(x=>x.classList.toggle('active',x===b));renderViewer()});
+  $('#zoomOut').onclick=()=>setViewerZoom(viewer.zoom/1.2);
+  $('#zoomIn').onclick=()=>setViewerZoom(viewer.zoom*1.2);
+  $('#zoomReset').onclick=()=>setViewerZoom(1);
+  $$('.viewerTabs [data-viewmode]').forEach(b=>b.onclick=()=>{
+    viewer.mode=b.dataset.viewmode;
+    $$('.viewerTabs [data-viewmode]').forEach(x=>x.classList.toggle('active',x===b));
+    viewer.pointers={};viewer.drag=null;viewer.pinch=null;
+    renderViewer();
+  });
   let svg=$('#viewerSvg');
-  svg.onpointerdown=e=>{if(viewer.mode!=='3d')return;e.preventDefault();viewer.drag={id:e.pointerId,x:e.clientX,y:e.clientY,yaw:viewer.yaw,pitch:viewer.pitch};svg.setPointerCapture?.(e.pointerId)};
-  svg.onpointermove=e=>{let d=viewer.drag;if(viewer.mode!=='3d'||!d||d.id!==e.pointerId)return;e.preventDefault();viewer.yaw=d.yaw+(e.clientX-d.x)*.45;viewer.pitch=Math.max(8,Math.min(72,d.pitch-(e.clientY-d.y)*.28));renderViewer()};
-  svg.onpointerup=svg.onpointercancel=e=>{if(viewer.drag?.id===e.pointerId)viewer.drag=null};
+  svg.onpointerdown=e=>{
+    if(viewer.mode!=='3d')return;
+    e.preventDefault();
+    viewer.pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+    svg.setPointerCapture?.(e.pointerId);
+    let pts=Object.values(viewer.pointers);
+    if(pts.length===1){
+      viewer.drag={id:e.pointerId,x:e.clientX,y:e.clientY,yaw:viewer.yaw,pitch:viewer.pitch};
+      viewer.pinch=null;
+    }else if(pts.length>=2){
+      viewer.drag=null;
+      viewer.pinch={distance:pointerDistance(),zoom:viewer.zoom};
+    }
+  };
+  svg.onpointermove=e=>{
+    if(viewer.mode!=='3d'||!viewer.pointers[e.pointerId])return;
+    e.preventDefault();
+    viewer.pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+    let pts=Object.values(viewer.pointers);
+    if(pts.length>=2&&viewer.pinch){
+      let d=pointerDistance();
+      if(viewer.pinch.distance>0)setViewerZoom(viewer.pinch.zoom*(d/viewer.pinch.distance));
+      return;
+    }
+    let d=viewer.drag;
+    if(d&&d.id===e.pointerId){
+      viewer.yaw=d.yaw+(e.clientX-d.x)*.45;
+      viewer.pitch=Math.max(8,Math.min(72,d.pitch-(e.clientY-d.y)*.28));
+      renderViewer();
+    }
+  };
+  function endPointer(e){
+    delete viewer.pointers[e.pointerId];
+    let pts=Object.entries(viewer.pointers);
+    viewer.pinch=null;viewer.drag=null;
+    if(pts.length===1){
+      let [id,p]=pts[0];
+      viewer.drag={id:Number(id),x:p.x,y:p.y,yaw:viewer.yaw,pitch:viewer.pitch};
+    }
+  }
+  svg.onpointerup=endPointer;
+  svg.onpointercancel=endPointer;
 }
 function $$(q){return [...document.querySelectorAll(q)]}
 
