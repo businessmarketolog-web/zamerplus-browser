@@ -22,6 +22,18 @@ button{border:0;border-radius:17px;min-height:54px;padding:0 16px;font-size:17px
 .empty{padding:34px 18px;text-align:center;color:#888;line-height:1.45}
 .note{background:#eef7f1;border-radius:16px;padding:14px 15px;color:#38634c;font-size:13px;line-height:1.45;margin-top:14px}
 .hidden{display:none!important}.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#111;color:#fff;padding:13px 18px;border-radius:14px;font-weight:800;max-width:88%;text-align:center;opacity:0;pointer-events:none;transition:.2s;z-index:10}.toast.show{opacity:1}
+
+.iconDanger{width:44px;height:44px;min-height:44px;padding:0;border-radius:14px;background:#fff0f0;color:#a72d2d;font-size:18px;flex:0 0 auto}
+.danger{background:#fff0f0;color:#a72d2d;border:1px solid #f0caca}
+.manage{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.manage button{font-size:14px;min-height:46px}
+.viewer{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:50;display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.viewer.hidden{display:none}.viewerCard{width:min(760px,100%);height:min(82vh,780px);background:#fff;border-radius:28px 28px 20px 20px;padding:18px;display:flex;flex-direction:column}
+.viewerHead{display:flex;align-items:center;gap:10px}.viewerHead h3{font-size:22px;margin:0;flex:1}.closeViewer{width:44px;height:44px;min-height:44px;border-radius:14px;background:#f0efec;font-size:24px}
+.viewerTabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.viewerTabs button{background:#f0efec;min-height:44px}.viewerTabs button.active{background:#111;color:#fff}
+.viewerCanvas{flex:1;min-height:320px;border:1px solid #e3e0db;border-radius:20px;background:#faf9f7;overflow:hidden}.viewerCanvas svg{width:100%;height:100%;touch-action:none}
+.viewerHint{color:#777;font-size:12px;margin-top:8px;text-align:center}
+@media(max-width:520px){.manage{grid-template-columns:1fr}.viewer{padding:0}.viewerCard{height:88vh;border-radius:24px 24px 0 0}}
+
 @media(max-width:520px){.wrap{padding-left:14px;padding-right:14px}.card{padding:17px}.head h1{font-size:24px}.pageHead h2{font-size:27px}.actions{grid-template-columns:1fr}.actions button{min-height:52px}}
 </style>
 </head>
@@ -45,10 +57,12 @@ button{border:0;border-radius:17px;min-height:54px;padding:0 16px;font-size:17px
   <div class="note">Каждая комната хранит собственный LiDAR‑скан и экспортируется отдельной моделью .DAE.</div>
 </section>
 </main>
+<div id="viewer" class="viewer hidden"><div class="viewerCard"><div class="viewerHead"><h3 id="viewerTitle">LiDAR</h3><button id="closeViewer" class="closeViewer">×</button></div><div class="viewerTabs"><button data-viewmode="3d" class="active">3D</button><button data-viewmode="top">Сверху</button></div><div class="viewerCanvas"><svg id="viewerSvg" viewBox="0 0 420 420"></svg></div><div id="viewerHint" class="viewerHint">Проведите пальцем по модели, чтобы повернуть</div></div></div>
 <div id="toast" class="toast"></div>
 <script>
 const STORE='zamerplus_projects_v1',OLD_STORE='zamerplus_lidar_only_v1';
 let state={projects:[],activeProjectId:null};
+let viewer={projectId:null,roomId:null,scan:null,mode:'3d',yaw:38,pitch:28,drag:null};
 
 const $=q=>document.querySelector(q);
 function toast(s){let e=$('#toast');e.textContent=s;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),2500)}
@@ -90,9 +104,10 @@ function renderProjects(){
   if(!state.projects.length){root.innerHTML='<div class="card empty">Создайте первый проект. Внутри него можно добавить комнаты и отдельно сканировать каждую через LiDAR.</div>';return}
   root.innerHTML=state.projects.map(p=>{
     let scanned=p.rooms.filter(r=>r.scan?.walls?.length).length;
-    return '<div class="card project" data-project="'+p.id+'"><div class="folder">📁</div><div class="grow"><div class="name">'+esc(p.name)+'</div><div class="meta">'+p.rooms.length+' комнат · '+scanned+' отсканировано</div></div><div class="chev">›</div></div>';
+    return '<div class="card project"><div class="folder">📁</div><div class="grow" data-open-project="'+p.id+'"><div class="name">'+esc(p.name)+'</div><div class="meta">'+p.rooms.length+' комнат · '+scanned+' отсканировано</div></div><div class="chev" data-open-project="'+p.id+'">›</div><button class="iconDanger" data-delete-project="'+p.id+'" aria-label="Удалить проект">🗑</button></div>';
   }).join('');
-  root.querySelectorAll('[data-project]').forEach(el=>el.onclick=()=>{state.activeProjectId=el.dataset.project;save();render()});
+  root.querySelectorAll('[data-open-project]').forEach(el=>el.onclick=()=>{state.activeProjectId=el.dataset.openProject;save();render()});
+  root.querySelectorAll('[data-delete-project]').forEach(el=>el.onclick=e=>{e.stopPropagation();deleteProject(el.dataset.deleteProject)});
 }
 
 function renderRooms(p){
@@ -101,12 +116,34 @@ function renderRooms(p){
   root.innerHTML=p.rooms.map(r=>{
     let ok=!!r.scan?.walls?.length,st=r.scan?.capturedAt?new Date(r.scan.capturedAt).toLocaleString():'';
     return '<div class="card"><div class="roomTitle"><div class="folder">📂</div><div class="grow"><div class="name">'+esc(r.name)+'</div><div class="meta">'+(ok?'LiDAR '+esc(st):'скан ещё не выполнен')+'</div></div></div>'+
-      '<div class="status"><span class="dot '+(ok?'good':'')+'"></span><span>'+(ok?'модель готова к экспорту':'ожидает LiDAR‑скан')+'</span></div>'+
+      '<div class="status"><span class="dot '+(ok?'good':'')+'"></span><span>'+(ok?'модель готова к просмотру и экспорту':'ожидает LiDAR‑скан')+'</span></div>'+
       (ok?'<div class="metrics"><div class="metric"><b>'+r.scan.walls.length+'</b><span>стен</span></div><div class="metric"><b>'+(r.scan.openings?.length||0)+'</b><span>проёмов</span></div><div class="metric"><b>'+(r.scan.heightMm||0)+'</b><span>высота, мм</span></div></div>':'')+
-      '<div class="actions"><button class="primary" data-scan="'+r.id+'">'+(ok?'Пересканировать LiDAR':'Сканировать LiDAR')+'</button><button class="dark" data-export="'+r.id+'" '+(ok?'':'disabled')+'>Передать в SketchUp .DAE</button></div></div>';
+      '<div class="actions"><button class="primary" data-scan="'+r.id+'">'+(ok?'Пересканировать LiDAR':'Сканировать LiDAR')+'</button><button class="soft" data-view="'+r.id+'" '+(ok?'':'disabled')+'>Просмотреть LiDAR</button><button class="dark" data-export="'+r.id+'" '+(ok?'':'disabled')+'>Передать в SketchUp .DAE</button></div>'+
+      '<div class="manage">'+(ok?'<button class="danger" data-delete-scan="'+r.id+'">Удалить LiDAR‑скан</button>':'')+'<button class="danger" data-delete-room="'+r.id+'">Удалить комнату</button></div></div>';
   }).join('');
   root.querySelectorAll('[data-scan]').forEach(el=>el.onclick=()=>launchLidar(p.id,el.dataset.scan));
+  root.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>openViewer(p.id,el.dataset.view));
   root.querySelectorAll('[data-export]').forEach(el=>el.onclick=()=>exportSketchUp(p.id,el.dataset.export));
+  root.querySelectorAll('[data-delete-scan]').forEach(el=>el.onclick=()=>deleteScan(p.id,el.dataset.deleteScan));
+  root.querySelectorAll('[data-delete-room]').forEach(el=>el.onclick=()=>deleteRoom(p.id,el.dataset.deleteRoom));
+}
+
+function deleteProject(id){
+  let p=state.projects.find(x=>x.id===id);if(!p)return;
+  if(!confirm('Удалить проект «'+p.name+'» и все его комнаты/сканы?'))return;
+  state.projects=state.projects.filter(x=>x.id!==id);
+  if(state.activeProjectId===id)state.activeProjectId=null;
+  save();render();toast('Проект удалён');
+}
+function deleteRoom(projectId,roomId){
+  let p=state.projects.find(x=>x.id===projectId),r=roomByIds(projectId,roomId);if(!p||!r)return;
+  if(!confirm('Удалить комнату «'+r.name+'» и её LiDAR‑скан?'))return;
+  p.rooms=p.rooms.filter(x=>x.id!==roomId);save();render();toast('Комната удалена');
+}
+function deleteScan(projectId,roomId){
+  let r=roomByIds(projectId,roomId);if(!r?.scan)return;
+  if(!confirm('Удалить LiDAR‑скан комнаты «'+r.name+'»?'))return;
+  r.scan=null;r.updatedAt=Date.now();save();render();toast('LiDAR‑скан удалён');
 }
 
 function createProject(){
@@ -160,23 +197,28 @@ function mergeIntervals(a){
 
 function axisTransform(scan){
   let ref=scan.walls.reduce((best,w)=>{
-    let x1=Number(w.x1Mm)||0,z1=Number(w.z1Mm)||0,x2=Number(w.x2Mm)||0,z2=Number(w.z2Mm)||0,L=Math.hypot(x2-x1,z2-z1);
-    return !best||L>best.L?{w,L,x1,z1,x2,z2}:best;
+    let x1=Number(w.x1Mm)||0,z1=Number(w.z1Mm)||0,x2=Number(w.x2Mm)||0,z2=Number(w.z2Mm)||0;
+    let raw=Math.hypot(x2-x1,z2-z1),L=Number(w.widthMm)>0?Number(w.widthMm):raw;
+    return !best||L>best.L?{w,L,x1,z1,x2,z2,raw}:best;
   },null);
-  function make(angle,anchorX,anchorZ){
-    let c=Math.cos(angle),ss=Math.sin(angle);
-    return function(x,z){
-      let dx=x-anchorX,dz=z-anchorZ,px=dx*c+dz*ss,py=-dx*ss+dz*c;
+  let angle=Math.atan2(ref.z2-ref.z1,ref.x2-ref.x1),c=Math.cos(angle),ss=Math.sin(angle);
+  return{
+    angle,
+    point(x,z){
+      let dx=x-ref.x1,dz=z-ref.z1,px=dx*c+dz*ss,py=-dx*ss+dz*c;
       if(Math.abs(px)<1e-9)px=0;if(Math.abs(py)<1e-9)py=0;
       return{x:px,y:py};
     }
-  }
-  let a=Math.atan2(ref.z2-ref.z1,ref.x2-ref.x1),point=make(a,ref.x1,ref.z1);
-  let all=[];scan.walls.forEach(w=>{all.push(point(Number(w.x1Mm)||0,Number(w.z1Mm)||0),point(Number(w.x2Mm)||0,Number(w.z2Mm)||0))});
-  let avgY=all.reduce((sum,q)=>sum+q.y,0)/Math.max(1,all.length);
-  if(avgY<0){a=Math.atan2(ref.z1-ref.z2,ref.x1-ref.x2);point=make(a,ref.x2,ref.z2)}
-  return{angle:a,point};
+  };
 }
+
+function wallFrame(scan,w,tr){
+  let a=tr.point(Number(w.x1Mm)||0,Number(w.z1Mm)||0),rawB=tr.point(Number(w.x2Mm)||0,Number(w.z2Mm)||0);
+  let rawL=Math.hypot(rawB.x-a.x,rawB.y-a.y)||1,L=Number(w.widthMm)>0?Number(w.widthMm):rawL;
+  let ux=(rawB.x-a.x)/rawL,uy=(rawB.y-a.y)/rawL;
+  return{a,b:{x:a.x+ux*L,y:a.y+uy*L},ux,uy,L,H:Math.max(1,Number(w.heightMm)||Number(scan.heightMm)||2700)};
+}
+
 function addQuad(vs,ts,p1,p2,z0,z1){
   const THICKNESS=1,half=THICKNESS/2;
   let dx=p2.x-p1.x,dy=p2.y-p1.y,L=Math.hypot(dx,dy)||1;
@@ -186,55 +228,171 @@ function addQuad(vs,ts,p1,p2,z0,z1){
     a.x,a.y,z0, b.x,b.y,z0, c.x,c.y,z0, d.x,d.y,z0,
     a.x,a.y,z1, b.x,b.y,z1, c.x,c.y,z1, d.x,d.y,z1
   );
-  [
-    [0,1,2],[0,2,3],
-    [4,6,5],[4,7,6],
-    [0,4,5],[0,5,1],
-    [1,5,6],[1,6,2],
-    [2,6,7],[2,7,3],
-    [3,7,4],[3,4,0]
-  ].forEach(f=>ts.push(...f.map(i=>i+base)));
+  [[0,1,2],[0,2,3],[4,6,5],[4,7,6],[0,4,5],[0,5,1],[1,5,6],[1,6,2],[2,6,7],[2,7,3],[3,7,4],[3,4,0]].forEach(f=>ts.push(...f.map(i=>i+base)));
+}
+
+function geomXml(id,name,vs,ts,material='wallMaterial'){
+  if(!vs.length||!ts.length)return null;
+  return '<geometry id="'+id+'" name="'+name+'"><mesh>'+
+    '<source id="'+id+'_pos"><float_array id="'+id+'_arr" count="'+vs.length+'">'+vs.join(' ')+'</float_array><technique_common><accessor source="#'+id+'_arr" count="'+(vs.length/3)+'" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source>'+
+    '<vertices id="'+id+'_v"><input semantic="POSITION" source="#'+id+'_pos"/></vertices>'+
+    '<triangles material="'+material+'" count="'+(ts.length/3)+'"><input semantic="VERTEX" source="#'+id+'_v" offset="0"/><p>'+ts.join(' ')+'</p></triangles>'+
+    '</mesh></geometry>';
 }
 
 function wallGeometry(scan,w,i,tr){
-  let a=tr.point(Number(w.x1Mm)||0,Number(w.z1Mm)||0),b=tr.point(Number(w.x2Mm)||0,Number(w.z2Mm)||0);
-  let L=Math.hypot(b.x-a.x,b.y-a.y)||Math.max(1,Number(w.widthMm)||1),H=Math.max(1,Number(w.heightMm)||Number(scan.heightMm)||2700);
-  let ux=(b.x-a.x)/L,uy=(b.y-a.y)/L,ops=(scan.openings||[]).filter(o=>o.parentId===w.id),bounds=[0,L];
-  for(let o of ops){let off=Math.max(0,Number(o.offsetMm)||0),ow=Math.max(0,Number(o.widthMm)||0);bounds.push(Math.min(L,off),Math.min(L,off+ow))}
+  let f=wallFrame(scan,w,tr),ops=(scan.openings||[]).filter(o=>o.parentId===w.id),bounds=[0,f.L];
+  for(let o of ops){
+    let off=Math.max(0,Math.min(f.L,Number(o.offsetMm)||0)),ow=Math.max(0,Number(o.widthMm)||0);
+    bounds.push(off,Math.min(f.L,off+ow));
+  }
   bounds=[...new Set(bounds)].sort((x,y)=>x-y);
   let vs=[],ts=[];
   for(let bi=0;bi<bounds.length-1;bi++){
     let x0=bounds[bi],x1=bounds[bi+1],mid=(x0+x1)/2,blocked=[];
     for(let o of ops){
-      let off=Math.max(0,Number(o.offsetMm)||0),ow=Math.max(0,Number(o.widthMm)||0);
-      if(mid>=off&&mid<=off+ow){let bot=Math.max(0,Number(o.bottomMm)||0),oh=Math.max(0,Number(o.heightMm)||0);blocked.push([Math.max(0,bot),Math.min(H,bot+oh)])}
+      let off=Math.max(0,Math.min(f.L,Number(o.offsetMm)||0)),ow=Math.max(0,Number(o.widthMm)||0);
+      if(mid>=off&&mid<=off+ow){
+        let bot=Math.max(0,Number(o.bottomMm)||0),oh=Math.max(0,Number(o.heightMm)||0);
+        blocked.push([Math.max(0,bot),Math.min(f.H,bot+oh)]);
+      }
     }
     blocked=mergeIntervals(blocked);
     let solids=[],cur=0;
     for(let q of blocked){if(q[0]>cur)solids.push([cur,q[0]]);cur=Math.max(cur,q[1])}
-    if(cur<H)solids.push([cur,H]);
-    let p1={x:a.x+ux*x0,y:a.y+uy*x0},p2={x:a.x+ux*x1,y:a.y+uy*x1};
+    if(cur<f.H)solids.push([cur,f.H]);
+    let p1={x:f.a.x+f.ux*x0,y:f.a.y+f.uy*x0},p2={x:f.a.x+f.ux*x1,y:f.a.y+f.uy*x1};
     for(let q of solids){if(q[1]-q[0]>=1&&x1-x0>=1)addQuad(vs,ts,p1,p2,q[0],q[1])}
   }
-  let id='wall_'+(i+1);
-  return '<geometry id="'+id+'" name="Wall_'+(i+1)+'"><mesh>'+
-    '<source id="'+id+'_pos"><float_array id="'+id+'_arr" count="'+vs.length+'">'+vs.join(' ')+'</float_array><technique_common><accessor source="#'+id+'_arr" count="'+(vs.length/3)+'" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source>'+
-    '<vertices id="'+id+'_v"><input semantic="POSITION" source="#'+id+'_pos"/></vertices>'+
-    '<triangles count="'+(ts.length/3)+'"><input semantic="VERTEX" source="#'+id+'_v" offset="0"/><p>'+ts.join(' ')+'</p></triangles>'+
-    '</mesh></geometry>';
+  return geomXml('wall_'+(i+1),'Wall_'+(i+1),vs,ts,'wallMaterial');
 }
+
+function polygonArea2D(p){let a=0;for(let i=0;i<p.length;i++){let q=p[i],r=p[(i+1)%p.length];a+=q.x*r.y-r.x*q.y}return a/2}
+function pointInTri(p,a,b,c){let s=(a.x-c.x)*(p.y-c.y)-(a.y-c.y)*(p.x-c.x),t=(b.x-a.x)*(p.y-a.y)-(b.y-a.y)*(p.x-a.x),u=(c.x-b.x)*(p.y-b.y)-(c.y-b.y)*(p.x-b.x);return (s>=0&&t>=0&&u>=0)||(s<=0&&t<=0&&u<=0)}
+function triangulate2D(points){
+  if(points.length<3)return[];
+  let idx=points.map((_,i)=>i),ccw=polygonArea2D(points)>0,out=[],guard=0;
+  while(idx.length>3&&guard++<1000){
+    let cut=false;
+    for(let j=0;j<idx.length;j++){
+      let ia=idx[(j-1+idx.length)%idx.length],ib=idx[j],ic=idx[(j+1)%idx.length],a=points[ia],b=points[ib],c=points[ic];
+      let cross=(b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x);
+      if((ccw&&cross<=1e-8)||(!ccw&&cross>=-1e-8))continue;
+      let inside=false;
+      for(let k of idx){if(k!==ia&&k!==ib&&k!==ic&&pointInTri(points[k],a,b,c)){inside=true;break}}
+      if(inside)continue;
+      out.push(ccw?[ia,ib,ic]:[ic,ib,ia]);idx.splice(j,1);cut=true;break;
+    }
+    if(!cut)break;
+  }
+  if(idx.length===3)out.push(ccw?[idx[0],idx[1],idx[2]]:[idx[2],idx[1],idx[0]]);
+  if(!out.length&&points.length>=3)for(let i=1;i<points.length-1;i++)out.push([0,i,i+1]);
+  return out;
+}
+
+function floorGeometry(scan,tr){
+  let poly=(scan.floorPolygon||[]).map(q=>tr.point(Number(q.xMm)||0,Number(q.zMm)||0));
+  if(poly.length<3)return null;
+  let tris=triangulate2D(poly),vs=[],ts=[];
+  poly.forEach(q=>vs.push(q.x,q.y,0));
+  tris.forEach(t=>ts.push(...t));
+  return geomXml('floor_1','Floor',vs,ts,'floorMaterial');
+}
+
+function bindMaterial(symbol,target){return '<bind_material><technique_common><instance_material symbol="'+symbol+'" target="#'+target+'"/></technique_common></bind_material>'}
 
 function buildDAE(scan){
   let tr=axisTransform(scan),geoms=[],nodes=[];
-  scan.walls.forEach((w,i)=>{let id='wall_'+(i+1);geoms.push(wallGeometry(scan,w,i,tr));nodes.push('<node id="Wall_'+(i+1)+'" name="Wall_'+(i+1)+'"><instance_geometry url="#'+id+'"/></node>')});
+  scan.walls.forEach((w,i)=>{
+    let id='wall_'+(i+1),g=wallGeometry(scan,w,i,tr);
+    if(g){geoms.push(g);nodes.push('<node id="Wall_'+(i+1)+'" name="Wall_'+(i+1)+'"><instance_geometry url="#'+id+'">'+bindMaterial('wallMaterial','mat_wall')+'</instance_geometry></node>')}
+  });
+  let floor=floorGeometry(scan,tr);
+  if(floor){geoms.push(floor);nodes.push('<node id="Floor" name="Floor"><instance_geometry url="#floor_1">'+bindMaterial('floorMaterial','mat_floor')+'</instance_geometry></node>')}
   let now=new Date().toISOString();
   return '<?xml version="1.0" encoding="utf-8"?>'+
   '<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">'+
-  '<asset><contributor><authoring_tool>Zamer+ LiDAR Projects · wall thickness 1 mm</authoring_tool></contributor><created>'+now+'</created><modified>'+now+'</modified><unit name="millimeter" meter="0.001"/><up_axis>Z_UP</up_axis></asset>'+
+  '<asset><contributor><authoring_tool>Zamer+ LiDAR Projects · SketchUp 2026 · 1mm walls</authoring_tool></contributor><created>'+now+'</created><modified>'+now+'</modified><unit name="millimeter" meter="0.001"/><up_axis>Z_UP</up_axis></asset>'+
+  '<library_effects><effect id="fx_wall"><profile_COMMON><technique sid="common"><lambert><diffuse><color>0.82 0.84 0.86 1</color></diffuse></lambert></technique></profile_COMMON></effect><effect id="fx_floor"><profile_COMMON><technique sid="common"><lambert><diffuse><color>0.92 0.91 0.88 1</color></diffuse></lambert></technique></profile_COMMON></effect></library_effects>'+
+  '<library_materials><material id="mat_wall" name="Walls"><instance_effect url="#fx_wall"/></material><material id="mat_floor" name="Floor"><instance_effect url="#fx_floor"/></material></library_materials>'+
   '<library_geometries>'+geoms.join('')+'</library_geometries>'+
   '<library_visual_scenes><visual_scene id="Scene" name="Scene">'+nodes.join('')+'</visual_scene></library_visual_scenes>'+
   '<scene><instance_visual_scene url="#Scene"/></scene></COLLADA>';
 }
+
+
+function openViewer(projectId,roomId){
+  let r=roomByIds(projectId,roomId);if(!r?.scan?.walls?.length)return toast('Скан отсутствует');
+  viewer.projectId=projectId;viewer.roomId=roomId;viewer.scan=r.scan;viewer.mode='3d';viewer.yaw=38;viewer.pitch=28;viewer.drag=null;
+  $('#viewerTitle').textContent=r.name+' · LiDAR';
+  $('#viewer').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+  $$('.viewerTabs [data-viewmode]').forEach(b=>b.classList.toggle('active',b.dataset.viewmode==='3d'));
+  renderViewer();
+}
+function closeViewer(){
+  $('#viewer').classList.add('hidden');document.body.style.overflow='';viewer.scan=null;viewer.drag=null;
+}
+function viewerBounds(scan,tr){
+  let pts=[];
+  scan.walls.forEach(w=>{let f=wallFrame(scan,w,tr);pts.push(f.a,f.b)});
+  let xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);
+  return{minx:Math.min(...xs),maxx:Math.max(...xs),miny:Math.min(...ys),maxy:Math.max(...ys)};
+}
+function projectViewer3D(x,y,z,cx,cy,scale){
+  let yr=viewer.yaw*Math.PI/180,pr=viewer.pitch*Math.PI/180,dx=x-cx,dy=y-cy;
+  let xr=dx*Math.cos(yr)-dy*Math.sin(yr),yr2=dx*Math.sin(yr)+dy*Math.cos(yr);
+  let sy=yr2*Math.sin(pr)-z*Math.cos(pr),depth=yr2*Math.cos(pr)+z*Math.sin(pr);
+  return{x:210+xr*scale,y:300+sy*scale,depth};
+}
+function renderViewer(){
+  let scan=viewer.scan,svg=$('#viewerSvg');if(!scan||!svg)return;
+  let tr=axisTransform(scan),b=viewerBounds(scan,tr),cx=(b.minx+b.maxx)/2,cy=(b.miny+b.maxy)/2,H=Math.max(...scan.walls.map(w=>Number(w.heightMm)||Number(scan.heightMm)||2700),1);
+  if(viewer.mode==='top'){
+    let scale=Math.min(350/Math.max(1,b.maxx-b.minx),330/Math.max(1,b.maxy-b.miny)),ox=35-b.minx*scale,oy=385+b.miny*scale;
+    let h='<rect width="420" height="420" fill="#faf9f7"/>';
+    let poly=(scan.floorPolygon||[]).map(q=>tr.point(Number(q.xMm)||0,Number(q.zMm)||0));
+    if(poly.length>=3)h+='<polygon points="'+poly.map(q=>(q.x*scale+ox)+','+(oy-q.y*scale)).join(' ')+'" fill="#f0eee9" stroke="#c9c6c0" stroke-width="1"/>';
+    scan.walls.forEach((w,i)=>{
+      let f=wallFrame(scan,w,tr),x1=f.a.x*scale+ox,y1=oy-f.a.y*scale,x2=f.b.x*scale+ox,y2=oy-f.b.y*scale;
+      h+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#111" stroke-width="5" stroke-linecap="round"/>';
+      (scan.openings||[]).filter(o=>o.parentId===w.id).forEach(o=>{
+        let off=Math.max(0,Math.min(f.L,Number(o.offsetMm)||0)),ow=Math.max(0,Number(o.widthMm)||0);
+        let ax=f.a.x+f.ux*off,ay=f.a.y+f.uy*off,bx=ax+f.ux*ow,by=ay+f.uy*ow;
+        h+='<line x1="'+(ax*scale+ox)+'" y1="'+(oy-ay*scale)+'" x2="'+(bx*scale+ox)+'" y2="'+(oy-by*scale)+'" stroke="#2f74c0" stroke-width="9" stroke-linecap="round"/>';
+      });
+      h+='<text x="'+((x1+x2)/2)+'" y="'+((y1+y2)/2-7)+'" text-anchor="middle" font-size="9" font-weight="800" fill="#666">С'+(i+1)+' · '+Math.round(f.L)+' мм</text>';
+    });
+    svg.innerHTML=h;$('#viewerHint').textContent='Вид сверху · размеры стен RoomPlan';return;
+  }
+  let range=Math.max(b.maxx-b.minx,b.maxy-b.miny,H*.9,1),scale=155/range,h='<rect width="420" height="420" fill="#faf9f7"/>';
+  let floor=(scan.floorPolygon||[]).map(q=>{let p=tr.point(Number(q.xMm)||0,Number(q.zMm)||0);return projectViewer3D(p.x,p.y,0,cx,cy,scale)});
+  if(floor.length>=3)h+='<polygon points="'+floor.map(q=>q.x+','+q.y).join(' ')+'" fill="#eeeae5" stroke="#bbb" stroke-width="1"/>';
+  let walls=scan.walls.map((w,i)=>{let f=wallFrame(scan,w,tr),m={x:(f.a.x+f.b.x)/2,y:(f.a.y+f.b.y)/2},d=projectViewer3D(m.x,m.y,f.H/2,cx,cy,scale).depth;return{w,i,f,depth:d}}).sort((a,b)=>a.depth-b.depth);
+  walls.forEach(({w,i,f})=>{
+    let p1=projectViewer3D(f.a.x,f.a.y,0,cx,cy,scale),p2=projectViewer3D(f.b.x,f.b.y,0,cx,cy,scale),p3=projectViewer3D(f.b.x,f.b.y,f.H,cx,cy,scale),p4=projectViewer3D(f.a.x,f.a.y,f.H,cx,cy,scale);
+    h+='<polygon points="'+[p1,p2,p3,p4].map(q=>q.x+','+q.y).join(' ')+'" fill="rgba(220,222,224,.72)" stroke="#222" stroke-width="1.5"/>';
+    (scan.openings||[]).filter(o=>o.parentId===w.id).forEach(o=>{
+      let off=Math.max(0,Math.min(f.L,Number(o.offsetMm)||0)),ow=Math.max(0,Number(o.widthMm)||0),oh=Math.max(0,Number(o.heightMm)||0),bot=Math.max(0,Number(o.bottomMm)||0);
+      let a={x:f.a.x+f.ux*off,y:f.a.y+f.uy*off},bb={x:a.x+f.ux*ow,y:a.y+f.uy*ow};
+      let q1=projectViewer3D(a.x,a.y,bot,cx,cy,scale),q2=projectViewer3D(bb.x,bb.y,bot,cx,cy,scale),q3=projectViewer3D(bb.x,bb.y,bot+oh,cx,cy,scale),q4=projectViewer3D(a.x,a.y,bot+oh,cx,cy,scale);
+      let fill=o.type==='window'?'rgba(87,164,235,.72)':o.type==='door'?'rgba(255,180,92,.78)':'rgba(255,255,255,.92)';
+      h+='<polygon points="'+[q1,q2,q3,q4].map(q=>q.x+','+q.y).join(' ')+'" fill="'+fill+'" stroke="#2f74c0" stroke-width="2"/>';
+    });
+  });
+  h+='<text x="12" y="20" font-size="9" font-weight="800" fill="#777">Поворот '+Math.round(viewer.yaw%360)+'° · наклон '+Math.round(viewer.pitch)+'°</text>';
+  svg.innerHTML=h;$('#viewerHint').textContent='Проведите пальцем по модели, чтобы повернуть';
+}
+function bindViewer(){
+  $('#closeViewer').onclick=closeViewer;
+  $('#viewer').onclick=e=>{if(e.target.id==='viewer')closeViewer()};
+  $$('.viewerTabs [data-viewmode]').forEach(b=>b.onclick=()=>{viewer.mode=b.dataset.viewmode;$$('.viewerTabs [data-viewmode]').forEach(x=>x.classList.toggle('active',x===b));renderViewer()});
+  let svg=$('#viewerSvg');
+  svg.onpointerdown=e=>{if(viewer.mode!=='3d')return;e.preventDefault();viewer.drag={id:e.pointerId,x:e.clientX,y:e.clientY,yaw:viewer.yaw,pitch:viewer.pitch};svg.setPointerCapture?.(e.pointerId)};
+  svg.onpointermove=e=>{let d=viewer.drag;if(viewer.mode!=='3d'||!d||d.id!==e.pointerId)return;e.preventDefault();viewer.yaw=d.yaw+(e.clientX-d.x)*.45;viewer.pitch=Math.max(8,Math.min(72,d.pitch-(e.clientY-d.y)*.28));renderViewer()};
+  svg.onpointerup=svg.onpointercancel=e=>{if(viewer.drag?.id===e.pointerId)viewer.drag=null};
+}
+function $$(q){return [...document.querySelectorAll(q)]}
 
 async function exportSketchUp(projectId,roomId){
   let p=state.projects.find(x=>x.id===projectId),r=roomByIds(projectId,roomId);
@@ -252,6 +410,7 @@ $('#newRoom').onclick=createRoom;
 $('#backProjects').onclick=()=>{state.activeProjectId=null;save();render()};
 
 load();
+bindViewer();
 processLidarHash();
 render();
 </script>
