@@ -11,11 +11,11 @@ targets:
     platform: iOS
     sources:
       - path: ZamerPlusLiDARBridge
-    info:
-      path: ZamerPlusLiDARBridge/Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ru.zamerplus.lidarbridge
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: "NO"
+        SWIFT_VERSION: "5.0"
+        INFOPLIST_FILE: ZamerPlusLiDARBridge/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"
