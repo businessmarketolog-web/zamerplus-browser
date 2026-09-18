@@ -18,6 +18,8 @@ input,textarea{width:100%;border:1px solid var(--line);border-radius:14px;paddin
 .notice{margin-top:14px;background:#fff;border-left:4px solid #b87316;border-radius:14px;padding:12px;line-height:1.45}.notice.good{border-left-color:var(--green)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:105px;background:#111;color:#fff;padding:12px 15px;border-radius:13px;opacity:0;pointer-events:none;transition:.2s;max-width:90vw}.toast.show{opacity:1}
 @media(max-width:560px){.grid{grid-template-columns:1fr}}
+
+.targetbar{display:grid;grid-template-columns:50px 1fr 50px;gap:8px;align-items:center;margin-top:10px}.arrowbtn{height:49px;border-radius:14px;background:#111;color:#fff;font-size:25px;font-weight:900;border:0}.targetcenter{min-height:49px;border:1px solid var(--line);border-radius:14px;background:#fff;padding:8px 10px;text-align:center}.plan{width:100%;height:330px;border:1px solid var(--line);background:#fbfbfa;border-radius:18px;margin-top:10px}.measureStrip{display:flex;gap:7px;overflow:auto;padding:4px 0}.chip{flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:13px;padding:9px 11px;font-weight:850}.chip.pending{background:#111;color:#fff}.photos,.shots{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}.photoCard{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff}.photoCard img,.shotCard img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover}.photoCap{padding:9px}.cloudTree{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f7f7f5;border-radius:14px;padding:11px;font-size:11px;line-height:1.55;white-space:pre-line}.quality{height:10px;background:#e8e8e4;border-radius:999px;overflow:hidden}.quality>div{height:100%;background:#111}.tech{border:1px solid var(--line);border-radius:14px;padding:10px;margin-top:8px}.nav{grid-template-columns:repeat(5,1fr)!important}@media(max-width:560px){.photos,.shots{grid-template-columns:1fr}}
 </style></head>
 <body><div class="app">
 <header class="top"><div class="brand">З+ &nbsp;Замер+</div><span class="pill good">Safari</span></header>
@@ -50,17 +52,30 @@ input,textarea{width:100%;border:1px solid var(--line);border-radius:14px;paddin
 <button class="secondary wide" id="addMm" style="margin-top:9px">Добавить вручную</button>
 <div id="hist" class="small" style="margin-top:12px"></div>
 </div>
+<div class="card"><div class="row"><div><h3>Назначить размер Bosch</h3><div class="small">стрелками выберите стену, высоту или проём</div></div><span id="pendingBadge" class="pill">нет значения</span></div><div class="targetbar"><button id="targetPrev" class="arrowbtn">‹</button><div class="targetcenter"><div id="targetName" class="title">Сначала выполните LiDAR‑скан</div><div id="targetValue" class="small">—</div></div><button id="targetNext" class="arrowbtn">›</button></div><div class="grid" style="margin-top:9px"><button id="assignBosch" class="primary wide">Применить размер</button><button id="autoAssign" class="secondary wide">Авто: выкл</button></div><div id="measureStrip" class="measureStrip"></div></div>
+<div class="card"><div class="row"><div><h3>План LiDAR + Bosch</h3><div class="small">зелёные значения подтверждены дальномером</div></div><button id="savePlanPng" class="secondary">PNG</button></div><svg id="planSvg" class="plan" viewBox="0 0 420 330"></svg><div class="small" id="planStats" style="margin-top:8px"></div></div>
+<div class="card"><div class="row"><div><h3>Технические элементы</h3><div class="small">розетки, трубы, вода, вентиляция и другое</div></div><button id="addTech" class="secondary">+ Добавить</button></div><div id="techList"></div></div>
+<div class="card"><div class="row"><div><h3>Фото + размеры</h3><div class="small">оригиналы и копии с размерными стрелками</div></div><button id="addPhoto" class="secondary">📷 Фото</button></div><input id="photoInput" type="file" accept="image/*" capture="environment" style="display:none"><div id="photoList" class="photos"></div></div>
+<div class="card"><div class="row"><div><h3>Скрины с размерами</h3><div class="small">автоматически после подтверждения Bosch</div></div><span id="shotCount" class="pill">0</span></div><div id="shotList" class="shots"></div></div>
 <div class="card"><label class="small">Заметки</label><textarea id="notes" placeholder="Розетки, трубы, вентканал…"></textarea></div>
 </section>
 
-<section id="export" class="view"><h2>Экспорт</h2><div class="card"><div class="small">Размеров</div><div id="mcount" class="big">0</div><button class="primary wide" id="json" style="margin-top:12px">Скачать measurements.json</button></div></section>
+
+<section id="cloud" class="view"><div class="row"><div><h2>Яндекс Диск</h2><div class="small">iPhone → облако → ПК</div></div><span id="yState" class="pill">не подключён</span></div><div class="card"><h3>Подключить</h3><button id="openYandex" class="primary wide">Получить OAuth‑токен</button><label class="small" style="margin-top:10px">Токен или URL с access_token</label><textarea id="yToken" placeholder="access_token..."></textarea><button id="saveYandex" class="secondary wide" style="margin-top:8px">Подключить</button></div><div class="card"><h3>Папка объекта</h3><div class="cloudTree">Замер+/Objects/&lt;объект&gt;/
+├─ project.json
+├─ SketchUp/model.dae
+├─ CAD/plan.dxf
+├─ Reports/plan_dimensions.png
+├─ Measurements/measurements.csv
+└─ Photos/ original_*.jpg + annotated_*.png</div><button id="syncNow" class="primary wide" style="margin-top:10px">Синхронизировать сейчас</button><div id="syncStatus" class="small" style="margin-top:8px"></div></div></section>
+<section id="export" class="view"><div class="row"><div><h2>SketchUp 2026</h2><div class="small">3D + CAD + отчёт</div></div><span id="qualityBadge" class="pill">0%</span></div><div class="card"><div class="quality"><div id="qualityBar" style="width:0%"></div></div><div id="qualityList" style="margin-top:8px"></div></div><div class="card"><label class="small">Толщина стен, мм</label><input id="wallThickness" inputmode="numeric" value="100"><button class="primary wide" id="exportAll" style="margin-top:10px">Экспорт DAE + DXF + JSON + PNG</button></div></section>
 
 <section id="help" class="view"><h2>Подключение</h2>
 <div class="card"><h3>LiDAR</h3><p class="small">Нажмите «Сканировать LiDAR». Safari откроет ZamerPlus Bridge, RoomPlan выполнит скан, после «Готово» данные автоматически вернутся сюда.</p></div>
 <div class="card"><h3>Bosch</h3><p class="small">Если WebBLE доступен — используем прямое BLE-подключение из Safari. Если нет — автоматически открывается ZamerPlus Bridge, который получает одно измерение через CoreBluetooth и возвращает его в Safari.</p></div>
 </section>
 </main>
-<nav class="nav"><button data-v="objects" class="active">⌂<br>Объекты</button><button data-v="measure">⌗<br>Замер</button><button data-v="export">⇧<br>Экспорт</button><button data-v="help">?<br>Помощь</button></nav>
+<nav class="nav"><button data-v="objects" class="active">⌂<br>Объекты</button><button data-v="measure">⌗<br>Замер</button><button data-v="cloud">☁<br>Облако</button><button data-v="export">⇧<br>SketchUp</button><button data-v="help">?<br>Помощь</button></nav>
 </div><div id="toast" class="toast"></div>
 
 <script>
