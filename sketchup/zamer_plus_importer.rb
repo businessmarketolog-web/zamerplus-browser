@@ -1,0 +1,14 @@
+# frozen_string_literal: true
+require 'sketchup.rb'
+require 'extensions.rb'
+
+module ZamerPlus
+  unless file_loaded?(__FILE__)
+    ext = SketchupExtension.new('Zamer+ Importer', 'zamer_plus_importer/main')
+    ext.description = 'Imports Zamer+ LiDAR JSON into SketchUp as native geometry.'
+    ext.version = '1.0.0'
+    ext.creator = 'Zamer+'
+    Sketchup.register_extension(ext, true)
+    file_loaded(__FILE__)
+  end
+end
