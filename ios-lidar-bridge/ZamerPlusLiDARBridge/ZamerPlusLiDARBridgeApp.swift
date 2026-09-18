@@ -46,8 +46,10 @@ final class BridgeCoordinator: ObservableObject {
             let data = try JSONSerialization.data(withJSONObject: payload, options: [])
             let encoded = data.base64URLEncodedString()
 
+            UIPasteboard.general.string = "ZAMERPLUS_LIDAR_V2:\(encoded)"
+
             var components = URLComponents(url: request.callback, resolvingAgainstBaseURL: false)
-            components?.fragment = "zamerplus_lidar=\(encoded)"
+            components?.fragment = "zamerplus_lidar_clipboard=1&requestId=\(request.id)"
 
             guard let returnURL = components?.url else {
                 statusText = "Не удалось сформировать ссылку возврата."
@@ -57,7 +59,11 @@ final class BridgeCoordinator: ObservableObject {
 
             statusText = "Скан завершён. Возвращаю результат в Safari…"
             scanRequest = nil
-            UIApplication.shared.open(returnURL)
+            UIApplication.shared.open(returnURL, options: [:]) { [weak self] opened in
+                if !opened {
+                    self?.statusText = "Скан сохранён. Вернитесь в Safari и нажмите «Импортировать LiDAR‑скан»."
+                }
+            }
         } catch {
             statusText = "Ошибка упаковки LiDAR: \(error.localizedDescription)"
             scanRequest = nil
