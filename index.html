@@ -20,30 +20,27 @@ input,textarea{width:100%;border:1px solid var(--line);border-radius:14px;paddin
 @media(max-width:560px){.grid{grid-template-columns:1fr}}
 </style></head>
 <body><div class="app">
-<header class="top"><div class="brand">З+ &nbsp;Замер+</div><span id="env" class="pill good">Safari</span></header>
+<header class="top"><div class="brand">З+ &nbsp;Замер+</div><span class="pill good">Safari</span></header>
 <main>
 <section id="objects" class="view active">
-<div class="hero"><div class="small" style="color:#aaa">IPHONE SAFARI · BOSCH BLE · LIDAR BRIDGE</div><h1>Замер+ в Safari.</h1><p>Bosch подключается через WebBLE‑расширение Safari. LiDAR кнопка готова к нативному RoomPlan‑bridge: без такого bridge Safari сам LiDAR не отдаёт.</p><button class="primary" id="newBtn">+ Новый объект</button></div>
+<div class="hero"><div class="small" style="color:#aaa">IPHONE SAFARI · LIDAR BRIDGE · BOSCH BLE</div><h1>Замер+ в Safari.</h1><p>Интерфейс работает как сайт. LiDAR и Bosch получают системный доступ через ZamerPlus Bridge и возвращают данные обратно в текущий объект.</p><button class="primary" id="newBtn">+ Новый объект</button></div>
 <div class="card"><div class="row"><div><b>Объекты</b><div class="small">хранятся на этом iPhone</div></div><span id="count" class="pill">0</span></div><div id="list"></div></div>
 </section>
 
 <section id="measure" class="view">
 <h2>Замер</h2>
 <div class="card"><div class="small">Текущий объект</div><h2 id="title">—</h2></div>
-
 <div class="grid">
 <div class="card">
-<div class="device"><div class="ico">↔</div><div><div class="title">Bosch GLM</div><div id="boschSub" class="small">Web Bluetooth</div></div><span id="boschStatus" class="pill">не подключён</span></div>
-<button class="primary wide" id="connectBosch" style="margin-top:12px">Подключить Bosch</button>
-<div style="margin-top:12px"><div class="small">Последнее измерение</div><div id="boschValue" class="big">—</div></div>
-<div class="notice" style="font-size:12px">На iPhone Safari нужен WebBLE extension. После включения расширение добавляет <code>navigator.bluetooth</code>.</div>
+<div class="device"><div class="ico">◫</div><div><div class="title">LiDAR / RoomPlan</div><div class="small">через ZamerPlus Bridge</div></div><span id="lidarStatus" class="pill">ожидание</span></div>
+<button class="primary wide" id="startLidar" style="margin-top:12px">Сканировать LiDAR</button>
+<div id="lidarResult" class="small" style="margin-top:12px">Скан ещё не выполнен.</div>
 </div>
 
 <div class="card">
-<div class="device"><div class="ico">◫</div><div><div class="title">LiDAR / RoomPlan</div><div id="lidarSub" class="small">Safari bridge</div></div><span id="lidarStatus" class="pill">ожидание</span></div>
-<button class="primary wide" id="startLidar" style="margin-top:12px">Сканировать LiDAR</button>
-<div id="lidarResult" class="small" style="margin-top:12px">LiDAR bridge не обнаружен.</div>
-<div class="notice" style="font-size:12px">Safari не имеет RoomPlan API. Кнопка работает только если на iPhone установлен наш native LiDAR bridge / Safari extension.</div>
+<div class="device"><div class="ico">↔</div><div><div class="title">Bosch GLM</div><div id="boschSub" class="small">WebBLE или Bridge</div></div><span id="boschStatus" class="pill">не подключён</span></div>
+<button class="primary wide" id="connectBosch" style="margin-top:12px">Получить измерение Bosch</button>
+<div style="margin-top:12px"><div class="small">Последнее измерение</div><div id="boschValue" class="big">—</div></div>
 </div>
 </div>
 
@@ -52,22 +49,21 @@ input,textarea{width:100%;border:1px solid var(--line);border-radius:14px;paddin
 <button class="secondary wide" id="addMm" style="margin-top:9px">Добавить вручную</button>
 <div id="hist" class="small" style="margin-top:12px"></div>
 </div>
-
 <div class="card"><label class="small">Заметки</label><textarea id="notes" placeholder="Розетки, трубы, вентканал…"></textarea></div>
 </section>
 
 <section id="export" class="view"><h2>Экспорт</h2><div class="card"><div class="small">Размеров</div><div id="mcount" class="big">0</div><button class="primary wide" id="json" style="margin-top:12px">Скачать measurements.json</button></div></section>
 
 <section id="help" class="view"><h2>Подключение</h2>
-<div class="card"><h3>Bosch через Safari</h3><p class="small">1. Установите и включите WebBLE Safari extension. 2. Разрешите расширению доступ к этому сайту. 3. Включите Bluetooth на GLM. 4. Нажмите «Подключить Bosch».</p></div>
-<div class="card"><h3>LiDAR через Safari</h3><p class="small">Прямого Web API для RoomPlan/LiDAR в Safari нет. Поэтому сайт уже поддерживает bridge‑события <code>zamerplus:lidar:start</code> / <code>zamerplus:lidar:result</code>. Их должен обслуживать нативный Safari‑helper.</p></div>
+<div class="card"><h3>LiDAR</h3><p class="small">Нажмите «Сканировать LiDAR». Safari откроет ZamerPlus Bridge, RoomPlan выполнит скан, после «Готово» данные автоматически вернутся сюда.</p></div>
+<div class="card"><h3>Bosch</h3><p class="small">Если WebBLE доступен — используем прямое BLE-подключение из Safari. Если нет — автоматически открывается ZamerPlus Bridge, который получает одно измерение через CoreBluetooth и возвращает его в Safari.</p></div>
 </section>
 </main>
 <nav class="nav"><button data-v="objects" class="active">⌂<br>Объекты</button><button data-v="measure">⌗<br>Замер</button><button data-v="export">⇧<br>Экспорт</button><button data-v="help">?<br>Помощь</button></nav>
 </div><div id="toast" class="toast"></div>
 
 <script>
-const KEY='zamerplus.safari.v2';
+const KEY='zamerplus.safari.v3';
 const BOSCH_SERVICE='02a6c0d0-0451-4000-b000-fb3210111989';
 const BOSCH_CHAR='02a6c0d1-0451-4000-b000-fb3210111989';
 const BOSCH_START=new Uint8Array([0xC0,0x55,0x02,0x01,0x00,0x1A]);
@@ -84,65 +80,91 @@ function addMeasurement(mm,source='manual'){let p=cur();if(!p)return toast('Сн
 $('#addMm').onclick=()=>{addMeasurement($('#mm').value,'manual');$('#mm').value=''};
 $('#notes').oninput=e=>{let p=cur();if(p){p.notes=e.target.value;p.updated=Date.now();localStorage.setItem(KEY,JSON.stringify(st))}};
 
+function returnURL(){return location.origin+location.pathname}
+function openBridge(kind){
+  const ret=encodeURIComponent(returnURL());
+  location.href='zamerplusbridge://'+kind+'?return='+ret;
+}
+
+$('#startLidar').onclick=()=>{
+  if(!cur())return toast('Сначала создайте объект');
+  $('#lidarStatus').textContent='открываю Bridge…';
+  openBridge('lidar');
+};
+
 function setBoschStatus(text,ok=false){$('#boschStatus').textContent=text;$('#boschStatus').className='pill '+(ok?'good':'bad')}
 async function connectBosch(){
+  if(!cur())return toast('Сначала создайте объект');
+  if(!navigator.bluetooth){
+    setBoschStatus('через Bridge',true);
+    openBridge('bosch');
+    return;
+  }
   try{
-    if(!navigator.bluetooth){
-      setBoschStatus('нет WebBLE',false);
-      toast('В Safari нужно установить и включить WebBLE extension');
-      window.open('https://ioswebble.com/','_blank');
-      return;
-    }
     setBoschStatus('поиск…');
     boschDevice=await navigator.bluetooth.requestDevice({filters:[{services:[BOSCH_SERVICE]}],optionalServices:[BOSCH_SERVICE]});
-    boschDevice.addEventListener('gattserverdisconnected',()=>setBoschStatus('отключён',false));
     const server=await boschDevice.gatt.connect();
     const service=await server.getPrimaryService(BOSCH_SERVICE);
     boschChar=await service.getCharacteristic(BOSCH_CHAR);
     await boschChar.startNotifications();
     boschChar.addEventListener('characteristicvaluechanged',onBoschValue);
     try{await boschChar.writeValue(BOSCH_START)}catch(e){try{await boschChar.writeValueWithoutResponse(BOSCH_START)}catch(_){}}
-    setBoschStatus('подключён',true);$('#boschSub').textContent=boschDevice.name||'GLM';toast('Bosch подключён');
-  }catch(e){setBoschStatus('ошибка',false);toast(e.message||'Не удалось подключить Bosch')}
+    setBoschStatus('подключён',true);
+    $('#boschSub').textContent=boschDevice.name||'GLM';
+    toast('Bosch подключён');
+  }catch(e){setBoschStatus('через Bridge',true);openBridge('bosch')}
 }
 function onBoschValue(ev){
   const dv=ev.target.value;
   if(!dv||dv.byteLength<11)return;
   const bytes=new Uint8Array(dv.buffer,dv.byteOffset,dv.byteLength);
   if(bytes[0]!==0xC0||bytes[1]!==0x55)return;
-  let meters=dv.getFloat32(7,true);
+  const meters=dv.getFloat32(7,true);
   if(!Number.isFinite(meters)||meters<=0||meters>250)return;
   const mm=Math.round(meters*1000);
   $('#boschValue').textContent=mm+' мм';
-  addMeasurement(mm,'bosch_ble');
+  addMeasurement(mm,'bosch_webble');
 }
 $('#connectBosch').onclick=connectBosch;
 
-let lidarTimer=null;
-function bridgePresent(){return !!window.ZamerPlusLiDARBridge||document.documentElement.dataset.zamerplusLidarBridge==='1'}
-$('#startLidar').onclick=()=>{
-  let p=cur();if(!p)return toast('Сначала создайте объект');
-  $('#lidarStatus').textContent='запуск…';$('#lidarStatus').className='pill';
-  window.dispatchEvent(new CustomEvent('zamerplus:lidar:start',{detail:{projectId:p.id}}));
-  clearTimeout(lidarTimer);
-  lidarTimer=setTimeout(()=>{
-    if(!bridgePresent()){
-      $('#lidarStatus').textContent='нет bridge';$('#lidarStatus').className='pill bad';
-      $('#lidarResult').textContent='Safari не предоставляет LiDAR напрямую. Нужен native LiDAR bridge.';
-      toast('LiDAR bridge не установлен');
+function decodeBase64URL(s){
+  s=s.replace(/-/g,'+').replace(/_/g,'/');
+  while(s.length%4)s+='=';
+  const bin=atob(s),bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+function consumeBridgeReturn(){
+  const raw=location.hash.replace(/^#/,'');if(!raw)return;
+  const q=new URLSearchParams(raw);
+  if(q.has('zp_bosch')){
+    const mm=Number(q.get('zp_bosch'));
+    if(Number.isFinite(mm)&&mm>0){
+      $('#boschValue').textContent=Math.round(mm)+' мм';
+      setBoschStatus('получено',true);
+      addMeasurement(Math.round(mm),'bosch_bridge');
+      show('measure');
     }
-  },1800);
-};
-window.addEventListener('zamerplus:lidar:ready',()=>{window.ZamerPlusLiDARBridge=true;$('#lidarStatus').textContent='готов';$('#lidarStatus').className='pill good';$('#lidarResult').textContent='Native RoomPlan bridge обнаружен.'});
-window.addEventListener('zamerplus:lidar:result',e=>{
-  clearTimeout(lidarTimer);window.ZamerPlusLiDARBridge=true;
-  let p=cur();if(!p)return;
-  p.lidar=e.detail||{};p.updated=Date.now();save();
-  const walls=p.lidar.walls?.length||0,doors=p.lidar.doors?.length||0,windows=p.lidar.windows?.length||0;
-  $('#lidarStatus').textContent='готов';$('#lidarStatus').className='pill good';
-  $('#lidarResult').textContent='LiDAR: '+walls+' стен, '+doors+' дверей, '+windows+' окон';
-  toast('LiDAR-скан получен');
-});
+  }
+  if(q.has('zp_lidar')){
+    try{
+      const payload=JSON.parse(decodeBase64URL(q.get('zp_lidar')));
+      const p=cur();
+      if(p){
+        p.lidar=payload;p.updated=Date.now();save();
+        const walls=payload.walls?.length||0;
+        const doors=Number(payload.doors||0);
+        const windows=Number(payload.windows||0);
+        $('#lidarStatus').textContent='готов';$('#lidarStatus').className='pill good';
+        $('#lidarResult').textContent='LiDAR: '+walls+' стен, '+doors+' дверей, '+windows+' окон';
+        toast('LiDAR-скан импортирован');
+        show('measure');
+      }
+    }catch(e){toast('Не удалось прочитать LiDAR-результат')}
+  }
+  if(q.has('zp_error'))toast('Bridge вернул ошибку');
+  history.replaceState(null,'',location.pathname+location.search);
+}
+
 $('#json').onclick=()=>{let p=cur();if(!p)return toast('Нет объекта');let a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(p,null,2)],{type:'application/json'}));a.href=u;a.download=(p.name||'zamer')+'_measurements.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 function render(){
   let p=cur();$('#count').textContent=st.projects.length;
@@ -151,7 +173,7 @@ function render(){
   $('#title').textContent=p?.name||'—';$('#notes').value=p?.notes||'';
   $('#hist').textContent=p?.measurements.length?'Последние: '+p.measurements.slice(-8).map(x=>x.mm).join(' · ')+' мм':'Размеров пока нет';
   $('#mcount').textContent=p?.measurements.length||0;
-  if(p?.lidar){let l=p.lidar;$('#lidarResult').textContent='LiDAR: '+(l.walls?.length||0)+' стен';}
+  if(p?.lidar){const l=p.lidar;$('#lidarStatus').textContent='готов';$('#lidarStatus').className='pill good';$('#lidarResult').textContent='LiDAR: '+(l.walls?.length||0)+' стен';}
 }
-render();
+consumeBridgeReturn();render();
 </script></body></html>
