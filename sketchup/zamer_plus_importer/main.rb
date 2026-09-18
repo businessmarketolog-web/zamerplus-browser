@@ -71,6 +71,18 @@ module ZamerPlus
       Geom::Point3d.new(x.mm, y.mm, z.mm)
     end
 
+    def dim_vec(f, distance)
+      Geom::Vector3d.new((-f[:uy]*distance).mm, (f[:ux]*distance).mm, 0)
+    end
+
+    def add_dim(entities, a, b, offset, layer)
+      dim = entities.add_dimension_linear(a, b, offset)
+      dim.layer = layer if dim
+      dim
+    rescue
+      nil
+    end
+
     def add_prism(entities, p1, p2, z0, z1)
       dx = p2[0]-p1[0]; dy = p2[1]-p1[1]
       l = Math.hypot(dx,dy)
@@ -148,9 +160,46 @@ module ZamerPlus
           solids.each{|q|add_prism(wg.entities,p1,p2,q[0],q[1]) if q[1]-q[0] >= 1.0 && x1-x0 >= 1.0}
         end
 
-        dim_offset = Geom::Vector3d.new((-f[:uy]*300).mm,(f[:ux]*300).mm,0)
-        dim = root.entities.add_dimension_linear(p3(f[:a][0],f[:a][1],0),p3(f[:a][0]+f[:ux]*f[:len],f[:a][1]+f[:uy]*f[:len],0),dim_offset)
-        dim.layer=dims_tag if dim
+        add_dim(
+          root.entities,
+          p3(f[:a][0],f[:a][1],0),
+          p3(f[:a][0]+f[:ux]*f[:len],f[:a][1]+f[:uy]*f[:len],0),
+          dim_vec(f,300),
+          dims_tag
+        )
+
+        ops.each_with_index do |o, oi|
+          off = [[0.0,n(o['offsetMm'])].max,f[:len]].min
+          ow  = [0.0,n(o['widthMm'])].max
+          oh  = [0.0,n(o['heightMm'])].max
+          bot = [0.0,n(o['bottomMm'])].max
+          ax = f[:a][0] + f[:ux]*off
+          ay = f[:a][1] + f[:uy]*off
+          bx = ax + f[:ux]*ow
+          by = ay + f[:uy]*ow
+
+          add_dim(root.entities, p3(ax,ay,bot), p3(bx,by,bot), dim_vec(f,170), dims_tag)
+          add_dim(root.entities, p3(bx,by,bot), p3(bx,by,bot+oh), dim_vec(f,120), dims_tag)
+          add_dim(root.entities, p3(f[:a][0],f[:a][1],0), p3(ax,ay,0), dim_vec(f,90), dims_tag) if off > 0.5
+          add_dim(root.entities, p3(ax,ay,0), p3(ax,ay,bot), dim_vec(f,240), dims_tag) if bot > 0.5
+
+          label = (o['type'] || 'opening').to_s.capitalize
+          txt = root.entities.add_text("#{label} #{ow.round}x#{oh.round}", p3((ax+bx)/2.0,(ay+by)/2.0,bot+oh+80))
+          txt.layer = dims_tag if txt
+        end
+      end
+
+      if walls.any?
+        base_wall = scan['_baseWallId'] && walls.find { |w| w['id'] == scan['_baseWallId'] }
+        base_wall ||= walls.first
+        hf = wall_frame(scan, base_wall, xf)
+        add_dim(
+          root.entities,
+          p3(hf[:a][0],hf[:a][1],0),
+          p3(hf[:a][0],hf[:a][1],hf[:h]),
+          dim_vec(hf,450),
+          dims_tag
+        )
       end
 
       poly = scan['floorPolygon'] || []
