@@ -178,9 +178,22 @@ function axisTransform(scan){
   return{angle:a,point};
 }
 function addQuad(vs,ts,p1,p2,z0,z1){
-  let base=vs.length/3;
-  vs.push(p1.x,p1.y,z0,p2.x,p2.y,z0,p2.x,p2.y,z1,p1.x,p1.y,z1);
-  ts.push(base,base+1,base+2,base,base+2,base+3);
+  const THICKNESS=1,half=THICKNESS/2;
+  let dx=p2.x-p1.x,dy=p2.y-p1.y,L=Math.hypot(dx,dy)||1;
+  let nx=-dy/L*half,ny=dx/L*half,base=vs.length/3;
+  let a={x:p1.x+nx,y:p1.y+ny},b={x:p2.x+nx,y:p2.y+ny},c={x:p2.x-nx,y:p2.y-ny},d={x:p1.x-nx,y:p1.y-ny};
+  vs.push(
+    a.x,a.y,z0, b.x,b.y,z0, c.x,c.y,z0, d.x,d.y,z0,
+    a.x,a.y,z1, b.x,b.y,z1, c.x,c.y,z1, d.x,d.y,z1
+  );
+  [
+    [0,1,2],[0,2,3],
+    [4,6,5],[4,7,6],
+    [0,4,5],[0,5,1],
+    [1,5,6],[1,6,2],
+    [2,6,7],[2,7,3],
+    [3,7,4],[3,4,0]
+  ].forEach(f=>ts.push(...f.map(i=>i+base)));
 }
 
 function wallGeometry(scan,w,i,tr){
@@ -217,7 +230,7 @@ function buildDAE(scan){
   let now=new Date().toISOString();
   return '<?xml version="1.0" encoding="utf-8"?>'+
   '<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">'+
-  '<asset><contributor><authoring_tool>Zamer+ LiDAR Projects</authoring_tool></contributor><created>'+now+'</created><modified>'+now+'</modified><unit name="millimeter" meter="0.001"/><up_axis>Z_UP</up_axis></asset>'+
+  '<asset><contributor><authoring_tool>Zamer+ LiDAR Projects · wall thickness 1 mm</authoring_tool></contributor><created>'+now+'</created><modified>'+now+'</modified><unit name="millimeter" meter="0.001"/><up_axis>Z_UP</up_axis></asset>'+
   '<library_geometries>'+geoms.join('')+'</library_geometries>'+
   '<library_visual_scenes><visual_scene id="Scene" name="Scene">'+nodes.join('')+'</visual_scene></library_visual_scenes>'+
   '<scene><instance_visual_scene url="#Scene"/></scene></COLLADA>';
