@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>Замер+</title>
-<script src="https://ioswebble.com/webble.js"></script>
+<script src="https://beacio.com/beacio.js"></script>
 <style>
 :root{--bg:#f5f5f2;--card:#fff;--text:#151515;--muted:#777;--line:#deded9;--accent:#c22f7a;--green:#13754b;--red:#b3261e}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Arial,sans-serif;padding-bottom:92px}
@@ -111,14 +111,15 @@ function setBoschStatus(text,ok=false){$('#boschStatus').textContent=text;$('#bo
 async function connectBosch(){
   if(!cur())return toast('Сначала создайте объект');
   if(!navigator.bluetooth){
-    setBoschStatus('нужен WebBLE',false);
-    toast('Установите и включите WebBLE Safari Extension');
-    window.open('https://ioswebble.com/','_blank');
+    setBoschStatus('beacio выключен',false);
+    $('#boschSub').textContent='Включите beacio в Safari → Расширения';
+    toast('Включите beacio в Safari и разрешите доступ на этом сайте');
+    window.open('https://beacio.com/','_blank');
     return;
   }
   try{
     setBoschStatus('поиск…');
-    boschDevice=await navigator.bluetooth.requestDevice({filters:[{services:[BOSCH_SERVICE]}],optionalServices:[BOSCH_SERVICE]});
+    boschDevice=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[BOSCH_SERVICE]});
     const server=await boschDevice.gatt.connect();
     const service=await server.getPrimaryService(BOSCH_SERVICE);
     boschChar=await service.getCharacteristic(BOSCH_CHAR);
@@ -128,7 +129,7 @@ async function connectBosch(){
     setBoschStatus('подключён',true);
     $('#boschSub').textContent=boschDevice.name||'GLM';
     toast('Bosch подключён');
-  }catch(e){setBoschStatus('ошибка',false);toast(e?.message||'Не удалось подключить Bosch')}
+  }catch(e){setBoschStatus('ошибка',false);$('#boschSub').textContent=e?.message||'Ошибка Bluetooth';toast(e?.message||'Не удалось подключить Bosch')}
 }
 function onBoschValue(ev){
   const dv=ev.target.value;
