@@ -347,7 +347,8 @@ function viewerBounds(scan,tr){
 function projectViewer3D(x,y,z,cx,cy,scale){
   let yr=viewer.yaw*Math.PI/180,pr=viewer.pitch*Math.PI/180,dx=x-cx,dy=y-cy;
   let xr=dx*Math.cos(yr)-dy*Math.sin(yr),yr2=dx*Math.sin(yr)+dy*Math.cos(yr);
-  let sy=yr2*Math.sin(pr)-z*Math.cos(pr),depth=yr2*Math.cos(pr)+z*Math.sin(pr);
+  // Match the top-view handedness: positive model Y must appear upward on screen.
+  let sy=-yr2*Math.sin(pr)-z*Math.cos(pr),depth=-yr2*Math.cos(pr)+z*Math.sin(pr);
   return{x:210+xr*scale,y:300+sy*scale,depth};
 }
 function renderViewer(){
