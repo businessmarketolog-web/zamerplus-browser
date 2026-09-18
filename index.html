@@ -201,11 +201,16 @@ function axisTransform(scan){
     let raw=Math.hypot(x2-x1,z2-z1),L=Number(w.widthMm)>0?Number(w.widthMm):raw;
     return !best||L>best.L?{w,L,x1,z1,x2,z2,raw}:best;
   },null);
-  let angle=Math.atan2(ref.z2-ref.z1,ref.x2-ref.x1),c=Math.cos(angle),ss=Math.sin(angle);
+  // RoomPlan: X horizontal, Y vertical, Z horizontal.
+  // SketchUp: X/Y horizontal, Z vertical.
+  // Y_sketchup = -Z_roomplan preserves right-handed coordinates and prevents mirroring.
+  let bx2=ref.x2-ref.x1,by2=-(ref.z2-ref.z1);
+  let angle=Math.atan2(by2,bx2),c=Math.cos(angle),ss=Math.sin(angle);
   return{
     angle,
     point(x,z){
-      let dx=x-ref.x1,dz=z-ref.z1,px=dx*c+dz*ss,py=-dx*ss+dz*c;
+      let dx=x-ref.x1,dy=-(z-ref.z1);
+      let px=dx*c+dy*ss,py=-dx*ss+dy*c;
       if(Math.abs(px)<1e-9)px=0;if(Math.abs(py)<1e-9)py=0;
       return{x:px,y:py};
     }
@@ -312,7 +317,7 @@ function buildDAE(scan){
   let now=new Date().toISOString();
   return '<?xml version="1.0" encoding="utf-8"?>'+
   '<COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">'+
-  '<asset><contributor><authoring_tool>Zamer+ LiDAR Projects · SketchUp 2026 · 1mm walls</authoring_tool></contributor><created>'+now+'</created><modified>'+now+'</modified><unit name="millimeter" meter="0.001"/><up_axis>Z_UP</up_axis></asset>'+
+  '<asset><contributor><authoring_tool>Zamer+ LiDAR Projects · SketchUp 2026 · right-handed axes · 1mm walls</authoring_tool></contributor><created>'+now+'</created><modified>'+now+'</modified><unit name="millimeter" meter="0.001"/><up_axis>Z_UP</up_axis></asset>'+
   '<library_effects><effect id="fx_wall"><profile_COMMON><technique sid="common"><lambert><diffuse><color>0.82 0.84 0.86 1</color></diffuse></lambert></technique></profile_COMMON></effect><effect id="fx_floor"><profile_COMMON><technique sid="common"><lambert><diffuse><color>0.92 0.91 0.88 1</color></diffuse></lambert></technique></profile_COMMON></effect></library_effects>'+
   '<library_materials><material id="mat_wall" name="Walls"><instance_effect url="#fx_wall"/></material><material id="mat_floor" name="Floor"><instance_effect url="#fx_floor"/></material></library_materials>'+
   '<library_geometries>'+geoms.join('')+'</library_geometries>'+
