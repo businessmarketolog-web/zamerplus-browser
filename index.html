@@ -35,6 +35,7 @@ input,textarea{width:100%;border:1px solid var(--line);border-radius:14px;paddin
 <div class="device"><div class="ico">◫</div><div><div class="title">LiDAR / RoomPlan</div><div class="small">через ZamerPlus Bridge</div></div><span id="lidarStatus" class="pill">ожидание</span></div>
 <button class="primary wide" id="startLidar" style="margin-top:12px">Сканировать LiDAR</button>
 <div id="lidarResult" class="small" style="margin-top:12px">Скан ещё не выполнен.</div>
+<a id="lidarInstall" href="https://github.com/businessmarketolog-web/zamerplus-browser/releases/download/lidar-bridge-latest/ZamerPlusLiDARBridge-unsigned.ipa" style="display:none;margin-top:10px;text-decoration:none" class="secondary wide">Скачать LiDAR Bridge IPA</a>
 </div>
 
 <div class="card">
@@ -81,23 +82,38 @@ $('#addMm').onclick=()=>{addMeasurement($('#mm').value,'manual');$('#mm').value=
 $('#notes').oninput=e=>{let p=cur();if(p){p.notes=e.target.value;p.updated=Date.now();localStorage.setItem(KEY,JSON.stringify(st))}};
 
 function returnURL(){return location.origin+location.pathname}
-function openBridge(kind){
-  const ret=encodeURIComponent(returnURL());
-  location.href='zamerplusbridge://'+kind+'?return='+ret;
+const LIDAR_BRIDGE_IPA='https://github.com/businessmarketolog-web/zamerplus-browser/releases/download/lidar-bridge-latest/ZamerPlusLiDARBridge-unsigned.ipa';
+function openLidarBridge(){
+  const requestId=(crypto.randomUUID?.()||Date.now().toString());
+  const callback=returnURL();
+  localStorage.setItem('zamerplus.pendingLidarRequest',requestId);
+  const deep='zamerpluslidar://scan?requestId='+encodeURIComponent(requestId)+'&callback='+encodeURIComponent(callback);
+  let leftPage=false;
+  const vis=()=>{if(document.visibilityState==='hidden')leftPage=true};
+  document.addEventListener('visibilitychange',vis,{once:true});
+  location.href=deep;
+  setTimeout(()=>{
+    if(!leftPage&&document.visibilityState==='visible'){
+      toast('LiDAR Bridge не открылся. Установите helper через SideStore.');
+      const a=document.getElementById('lidarInstall');
+      if(a)a.style.display='block';
+    }
+  },1800);
 }
 
 $('#startLidar').onclick=()=>{
   if(!cur())return toast('Сначала создайте объект');
-  $('#lidarStatus').textContent='открываю Bridge…';
-  openBridge('lidar');
+  $('#lidarStatus').textContent='открываю LiDAR…';
+  openLidarBridge();
 };
 
 function setBoschStatus(text,ok=false){$('#boschStatus').textContent=text;$('#boschStatus').className='pill '+(ok?'good':'bad')}
 async function connectBosch(){
   if(!cur())return toast('Сначала создайте объект');
   if(!navigator.bluetooth){
-    setBoschStatus('через Bridge',true);
-    openBridge('bosch');
+    setBoschStatus('нужен WebBLE',false);
+    toast('Установите и включите WebBLE Safari Extension');
+    window.open('https://ioswebble.com/','_blank');
     return;
   }
   try{
@@ -112,7 +128,7 @@ async function connectBosch(){
     setBoschStatus('подключён',true);
     $('#boschSub').textContent=boschDevice.name||'GLM';
     toast('Bosch подключён');
-  }catch(e){setBoschStatus('через Bridge',true);openBridge('bosch')}
+  }catch(e){setBoschStatus('ошибка',false);toast(e?.message||'Не удалось подключить Bosch')}
 }
 function onBoschValue(ev){
   const dv=ev.target.value;
@@ -145,15 +161,16 @@ function consumeBridgeReturn(){
       show('measure');
     }
   }
-  if(q.has('zp_lidar')){
+  const lidarEncoded=q.get('zamerplus_lidar')||q.get('zp_lidar');
+  if(lidarEncoded){
     try{
-      const payload=JSON.parse(decodeBase64URL(q.get('zp_lidar')));
+      const payload=JSON.parse(decodeBase64URL(lidarEncoded));
       const p=cur();
       if(p){
         p.lidar=payload;p.updated=Date.now();save();
         const walls=payload.walls?.length||0;
-        const doors=Number(payload.doors||0);
-        const windows=Number(payload.windows||0);
+        const doors=Number(payload.doorsCount??payload.doors??0);
+        const windows=Number(payload.windowsCount??payload.windows??0);
         $('#lidarStatus').textContent='готов';$('#lidarStatus').className='pill good';
         $('#lidarResult').textContent='LiDAR: '+walls+' стен, '+doors+' дверей, '+windows+' окон';
         toast('LiDAR-скан импортирован');
@@ -162,6 +179,7 @@ function consumeBridgeReturn(){
     }catch(e){toast('Не удалось прочитать LiDAR-результат')}
   }
   if(q.has('zp_error'))toast('Bridge вернул ошибку');
+  if(q.has('zamerplus_lidar_cancelled'))toast('LiDAR-скан отменён');
   history.replaceState(null,'',location.pathname+location.search);
 }
 
