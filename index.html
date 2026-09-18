@@ -499,7 +499,10 @@ function renderViewer(){
       (scan.openings||[]).filter(o=>o.parentId===w.id).forEach(o=>{
         let off=Math.max(0,Math.min(f.L,Number(o.offsetMm)||0)),ow=Math.max(0,Number(o.widthMm)||0);
         let ax=f.a.x+f.ux*off,ay=f.a.y+f.uy*off,bx=ax+f.ux*ow,by=ay+f.uy*ow;
-        h+='<line x1="'+(ax*scale+ox)+'" y1="'+(oy-ay*scale)+'" x2="'+(bx*scale+ox)+'" y2="'+(oy-by*scale)+'" stroke="#2f74c0" stroke-width="9" stroke-linecap="round"/>';
+        let sx=ax*scale+ox,sy=oy-ay*scale,ex=bx*scale+ox,ey=oy-by*scale;
+        h+='<line x1="'+sx+'" y1="'+sy+'" x2="'+ex+'" y2="'+ey+'" stroke="#2f74c0" stroke-width="9" stroke-linecap="round"/>';
+        let tx=(sx+ex)/2,ty=(sy+ey)/2+14,label=(o.type==='door'?'Д':o.type==='window'?'О':'П')+' '+Math.round(ow)+' мм · отст. '+Math.round(off);
+        h+='<text x="'+tx+'" y="'+ty+'" text-anchor="middle" font-size="7" font-weight="800" fill="#1f5f9f">'+label+'</text>';
       });
       h+='<text x="'+((x1+x2)/2)+'" y="'+((y1+y2)/2-7)+'" text-anchor="middle" font-size="9" font-weight="800" fill="#666">С'+(i+1)+' · '+Math.round(f.L)+' мм</text>';
     });
@@ -525,6 +528,7 @@ function renderViewer(){
     });
   });
   h+='<text x="12" y="20" font-size="9" font-weight="800" fill="#777">Поворот '+Math.round(viewer.yaw%360)+'° · наклон '+Math.round(viewer.pitch)+'°</text>';
+  h+='<text x="408" y="20" text-anchor="end" font-size="9" font-weight="900" fill="#333">H '+Math.round(H)+' мм</text>';
   svg.innerHTML=h;$('#viewerHint').textContent='Проведите пальцем по модели, чтобы повернуть';
 }
 function setViewerZoom(z){
