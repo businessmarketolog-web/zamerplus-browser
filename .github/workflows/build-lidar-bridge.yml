@@ -1,0 +1,55 @@
+name: Build LiDAR Bridge IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ios-lidar-bridge/**"
+      - ".github/workflows/build-lidar-bridge.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios-lidar-bridge
+        run: xcodegen generate
+
+      - name: Build unsigned iPhone app
+        working-directory: ios-lidar-bridge
+        run: |
+          set -euo pipefail
+          xcodebuild             -project ZamerPlusLiDARBridge.xcodeproj             -scheme ZamerPlusLiDARBridge             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$RUNNER_TEMP/DerivedData"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             build
+
+          APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/ZamerPlusLiDARBridge.app"
+          test -d "$APP"
+
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qry ZamerPlusLiDARBridge-unsigned.ipa Payload
+          mv ZamerPlusLiDARBridge-unsigned.ipa "$GITHUB_WORKSPACE/"
+
+      - name: Upload Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZamerPlusLiDARBridge-unsigned
+          path: ZamerPlusLiDARBridge-unsigned.ipa
+
+      - name: Publish latest bridge release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view lidar-bridge-latest >/dev/null 2>&1; then
+            gh release create lidar-bridge-latest               --title "Zamer+ LiDAR Bridge — latest"               --notes "Unsigned IPA for SideStore. Built automatically from the current source."               --prerelease
+          fi
+          gh release upload lidar-bridge-latest ZamerPlusLiDARBridge-unsigned.ipa --clobber
