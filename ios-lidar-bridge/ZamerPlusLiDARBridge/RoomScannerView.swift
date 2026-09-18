@@ -83,10 +83,12 @@ final class RoomScannerViewController: UIViewController, RoomCaptureViewDelegate
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+
         guard RoomCaptureSession.isSupported else {
             showUnsupported()
             return
         }
+
         captureView.captureSession.run(configuration: RoomCaptureSession.Configuration())
     }
 
@@ -134,7 +136,10 @@ final class RoomScannerViewController: UIViewController, RoomCaptureViewDelegate
         didFinish = true
 
         if let error {
-            onComplete?(["requestId": requestId, "error": error.localizedDescription])
+            onComplete?([
+                "requestId": requestId,
+                "error": error.localizedDescription
+            ])
             return
         }
 
@@ -154,6 +159,7 @@ final class RoomScannerViewController: UIViewController, RoomCaptureViewDelegate
             let z1 = center.z - normalized.y * half
             let x2 = center.x + normalized.x * half
             let z2 = center.z + normalized.y * half
+
             let heading = atan2(normalized.y, normalized.x) * 180 / Float.pi
 
             return [
@@ -181,7 +187,9 @@ final class RoomScannerViewController: UIViewController, RoomCaptureViewDelegate
                 let axis = SIMD2<Float>(wall.transform.columns.0.x, wall.transform.columns.0.z)
                 let normalized = simd_length(axis) > 0.0001 ? simd_normalize(axis) : SIMD2<Float>(1, 0)
                 let delta = SIMD2<Float>(center.x - wallCenter.x, center.z - wallCenter.z)
+
                 offset = simd_dot(delta, normalized) + wall.dimensions.x / 2
+
                 let wallBottom = wallCenter.y - wall.dimensions.y / 2
                 bottom = max(0, (center.y - surface.dimensions.y / 2) - wallBottom)
             }
@@ -214,7 +222,10 @@ final class RoomScannerViewController: UIViewController, RoomCaptureViewDelegate
             }
         }
 
-        let heights = room.walls.map { Int(($0.dimensions.y * 1000).rounded()) }.sorted()
+        let heights = room.walls
+            .map { Int(($0.dimensions.y * 1000).rounded()) }
+            .sorted()
+
         let roomHeight = heights.isEmpty ? 0 : heights[heights.count / 2]
 
         return [

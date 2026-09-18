@@ -82,6 +82,7 @@ struct BridgeHomeView: View {
         NavigationStack {
             VStack(spacing: 18) {
                 Spacer()
+
                 Image(systemName: "viewfinder.circle.fill")
                     .font(.system(size: 74))
                     .symbolRenderingMode(.hierarchical)
@@ -111,6 +112,7 @@ struct BridgeHomeView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 30)
+
                 Spacer()
             }
             .fullScreenCover(item: $coordinator.scanRequest) { request in

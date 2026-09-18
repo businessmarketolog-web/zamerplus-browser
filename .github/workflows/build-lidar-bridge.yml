@@ -28,7 +28,17 @@ jobs:
         working-directory: ios-lidar-bridge
         run: |
           set -euo pipefail
-          xcodebuild             -project ZamerPlusLiDARBridge.xcodeproj             -scheme ZamerPlusLiDARBridge             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$RUNNER_TEMP/DerivedData"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             build
+          xcodebuild \
+            -project ZamerPlusLiDARBridge.xcodeproj \
+            -scheme ZamerPlusLiDARBridge \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
 
           APP="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos/ZamerPlusLiDARBridge.app"
           test -d "$APP"
@@ -50,6 +60,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! gh release view lidar-bridge-latest >/dev/null 2>&1; then
-            gh release create lidar-bridge-latest               --title "Zamer+ LiDAR Bridge — latest"               --notes "Unsigned IPA for SideStore. Built automatically from the current source."               --prerelease
+            gh release create lidar-bridge-latest \
+              --title "Zamer+ LiDAR Bridge — latest" \
+              --notes "Unsigned IPA for SideStore. Built automatically from the current source." \
+              --prerelease
           fi
           gh release upload lidar-bridge-latest ZamerPlusLiDARBridge-unsigned.ipa --clobber
