@@ -43,13 +43,47 @@ final class BridgeCoordinator: ObservableObject {
 
     func complete(request: ScanRequest, payload: [String: Any]) {
         do {
-            let data = try JSONSerialization.data(withJSONObject: payload, options: [])
-            let encoded = data.base64URLEncodedString()
+            let fullData = try JSONSerialization.data(withJSONObject: payload, options: [])
+            UIPasteboard.general.string = "ZAMERPLUS_LIDAR_V2:\(fullData.base64URLEncodedString())"
 
-            UIPasteboard.general.string = "ZAMERPLUS_LIDAR_V2:\(encoded)"
+            func keep(_ source: [String: Any], _ keys: [String]) -> [String: Any] {
+                var out: [String: Any] = [:]
+                for key in keys {
+                    if let value = source[key] { out[key] = value }
+                }
+                return out
+            }
 
+            var compact: [String: Any] = [:]
+            for key in ["version","requestId","source","capturedAt","heightMm","doorsCount","windowsCount"] {
+                if let value = payload[key] { compact[key] = value }
+            }
+
+            let walls = (payload["walls"] as? [[String: Any]] ?? []).map {
+                keep($0, ["id","widthMm","heightMm","x1Mm","z1Mm","x2Mm","z2Mm","centerXMm","centerZMm","headingDeg"])
+            }
+            let openings = (payload["openings"] as? [[String: Any]] ?? []).map {
+                keep($0, ["id","type","parentId","widthMm","heightMm","offsetMm","bottomMm"])
+            }
+            let floorPolygon = payload["floorPolygon"] as? [[String: Any]] ?? []
+            let objects = (payload["objects"] as? [[String: Any]] ?? []).map {
+                keep($0, ["id","category","widthMm","heightMm","depthMm","centerXMm","centerYMm","centerZMm","headingDeg"])
+            }
+
+            compact["walls"] = walls
+            compact["openings"] = openings
+            compact["floorPolygon"] = floorPolygon
+            compact["objects"] = objects
+
+            var compactData = try JSONSerialization.data(withJSONObject: compact, options: [])
+            if compactData.count > 7000 {
+                compact["objects"] = []
+                compactData = try JSONSerialization.data(withJSONObject: compact, options: [])
+            }
+
+            let encoded = compactData.base64URLEncodedString()
             var components = URLComponents(url: request.callback, resolvingAgainstBaseURL: false)
-            components?.fragment = "zamerplus_lidar_clipboard=1&requestId=\(request.id)"
+            components?.fragment = "zamerplus_lidar_auto=\(encoded)&requestId=\(request.id)"
 
             guard let returnURL = components?.url else {
                 statusText = "Не удалось сформировать ссылку возврата."
@@ -57,11 +91,11 @@ final class BridgeCoordinator: ObservableObject {
                 return
             }
 
-            statusText = "Скан завершён. Возвращаю результат в Safari…"
+            statusText = "Скан завершён. Передаю геометрию в Safari…"
             scanRequest = nil
             UIApplication.shared.open(returnURL, options: [:]) { [weak self] opened in
                 if !opened {
-                    self?.statusText = "Скан сохранён. Вернитесь в Safari и нажмите «Импортировать LiDAR‑скан»."
+                    self?.statusText = "Скан сохранён. Вернитесь в Safari — резервная копия находится в буфере обмена."
                 }
             }
         } catch {
