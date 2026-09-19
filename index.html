@@ -169,6 +169,7 @@ function scanStatsHtml(scan,r){
     let d=Number(e.widthMm)-Number(orig.widthMm);return Number.isFinite(d)&&Math.abs(d)>=1?'Стена '+((raw.walls||[]).indexOf(orig)+1)+': '+(d>0?'+':'')+Math.round(d)+' мм':'';
   }).filter(Boolean);
   let result=pts.length>=3?'<div class="sectionNote">Площадь по контуру: ≈ '+(Math.abs(area)/2000000).toFixed(2)+' м² (оценка LiDAR, не контрольный замер)</div>':'';
+  if(pts.length===4){let d1=Math.hypot(pts[0].x-pts[2].x,pts[0].y-pts[2].y),d2=Math.hypot(pts[1].x-pts[3].x,pts[1].y-pts[3].y);result+='<div class="sectionNote">Диагонали по углам LiDAR: '+Math.round(d1)+' / '+Math.round(d2)+' мм. Проверьте лазером.</div>';}
   if(dw.length)result+='<div class="sectionNote">Правки относительно исходного скана: '+esc(dw.join(' · '))+'</div>';
   return result;
 }
@@ -263,10 +264,20 @@ function projectPayload(p){
   if(!p)return null;let rooms=p.rooms.filter(r=>r.scan?.walls?.length);if(!rooms.length)return null;
   let cursor=0,unverified=[];
   let payloadRooms=rooms.map(r=>{
-    let placement=r.placement?.verified?r.placement:{xMm:cursor,yMm:0,rotationDeg:0,verified:false};
-    let scan=effectiveScan(r),lengths=scan.walls.map(w=>Number(w.widthMm)||0);
-    cursor+=Math.max(...lengths,1000)+1000;
-    if(!placement.verified)unverified.push(r.name);
+    let scan=effectiveScan(r),transform=axisTransform(scan);
+    let points=scan.walls.flatMap(w=>[transform.point(Number(w.x1Mm)||0,Number(w.z1Mm)||0),transform.point(Number(w.x2Mm)||0,Number(w.z2Mm)||0)]);
+    let xs=points.map(p=>p.x),minx=Math.min(...xs),maxx=Math.max(...xs);
+    let placement;
+    if(r.placement?.verified){
+      placement=r.placement;
+      let rad=(Number(placement.rotationDeg)||0)*Math.PI/180,c=Math.cos(rad),ss=Math.sin(rad);
+      let rotatedMax=Math.max(...points.map(q=>q.x*c-q.y*ss));
+      cursor=Math.max(cursor,(Number(placement.xMm)||0)+rotatedMax+1000);
+    }else{
+      placement={xMm:cursor-minx,yMm:0,rotationDeg:0,verified:false};
+      cursor+=maxx-minx+1000;
+      unverified.push(r.name);
+    }
     return{roomId:r.id,roomName:r.name,revisionId:String(r.updatedAt||'0'),scan,notes:r.notes||{},placement};
   });
   if(unverified.length&&!confirm('ВНИМАНИЕ: взаимная привязка комнат «'+unverified.join(', ')+'» не подтверждена. Они будут размещены рядом условно, НЕ как точный план объекта. Продолжить?'))return null;
