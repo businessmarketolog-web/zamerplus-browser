@@ -307,10 +307,10 @@ module ZamerPlus
     end
 
     def empty_model?(model)
-      model.path.to_s.empty? && model.entities.empty? && (!model.respond_to?(:modified?) || !model.modified?)
+      model.path.to_s.empty? && model.entities.length == 0
     end
 
-    def import_pending(force = false)
+    def import_pending(force = false, silent = false)
       return if @busy
       path=pending_files.first
       return unless path
@@ -319,7 +319,9 @@ module ZamerPlus
         return unless force
         Sketchup.file_new
         model=Sketchup.active_model
-        return unless model.path.to_s.empty? && model.entities.empty?
+        return unless model.path.to_s.empty?
+        # Explicit user action: clear only the newly created template scene.
+        model.entities.erase_entities(model.entities.to_a) unless model.entities.length == 0
       end
       @busy=true
       result=import_file(path,true)
@@ -332,13 +334,13 @@ module ZamerPlus
       completed=File.join(inbox_root,'Processed')
       FileUtils.mkdir_p(completed)
       FileUtils.mv(path,File.join(completed,File.basename(path)))
-      UI.messagebox('Замер+ — готово. Модель сохранена: '+destination) if force
+      UI.messagebox('Замер+ — готово. Модель сохранена: '+destination) if force && !silent
       destination
     rescue => e
       FileUtils.mkdir_p(File.join(inbox_root,'Failed'))
       File.write(File.join(inbox_root,'Failed',File.basename(path)+'.txt'),e.message) if path
       FileUtils.mv(path,File.join(inbox_root,'Failed',File.basename(path))) if path && File.file?(path)
-      UI.messagebox('Замер+ — ошибка импорта: '+e.message) if force
+      UI.messagebox('Замер+ — ошибка импорта: '+e.message) if force && !silent
       nil
     ensure
       @busy=false
