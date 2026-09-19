@@ -4,7 +4,6 @@ on:
     paths:
       - 'index.html'
       - 'sketchup/**'
-      - 'desktop-receiver/**'
       - 'tests/**'
       - '.github/workflows/check-zamer.yml'
   workflow_dispatch:
@@ -23,11 +22,9 @@ jobs:
           Path('/tmp/zamer-web.js').write_text(s.split('<script>')[-1].split('</script>')[0],encoding='utf-8')
           PY
           node --check /tmp/zamer-web.js
-          node --check desktop-receiver/receiver.js
-      - name: Web and LAN receiver tests
+      - name: Web export and project tests
         run: |
           node tests/web.test.js
-          node tests/receiver.test.js
       - name: Ruby syntax and coordinate orientation
         run: |
           ruby -c sketchup/zamer_plus_importer.rb
