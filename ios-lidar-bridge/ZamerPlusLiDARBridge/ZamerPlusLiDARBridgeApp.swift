@@ -45,15 +45,18 @@ final class BridgeCoordinator: ObservableObject {
         scanRequest = ScanRequest(id: requestId, callback: callback)
     }
 
-    private func isPrivateIPv4(_ ip: String) -> Bool {
+    private func isReceiverIPv4(_ ip: String, remote: Bool) -> Bool {
         let parts = ip.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 4 else { return false }
         let values = parts.compactMap { part -> Int? in
-            guard part.count <= 3, !part.isEmpty, part.allSatisfy({ $0.isNumber }), let n = Int(part), (0...255).contains(n) else { return nil }
+            guard part.count <= 3, !part.isEmpty, part.allSatisfy({ $0.isNumber }),
+                  let n = Int(part), (0...255).contains(n) else { return nil }
             return n
         }
         guard values.count == 4 else { return false }
-        return values[0] == 10 || (values[0] == 192 && values[1] == 168) || (values[0] == 172 && (16...31).contains(values[1]))
+        if remote { return values[0] == 100 && (64...127).contains(values[1]) }
+        return values[0] == 10 || (values[0] == 192 && values[1] == 168) ||
+            (values[0] == 172 && (16...31).contains(values[1]))
     }
 
     private func transferCallback(_ callback: URL, status: String) {
@@ -63,43 +66,63 @@ final class BridgeCoordinator: ObservableObject {
     }
 
     private func handleSend(url: URL) {
-        guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { statusText = "Некорректная ссылка передачи"; return }
+        guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            statusText = "Некорректная ссылка передачи"; return
+        }
         var params: [String: String] = [:]
         for item in c.queryItems ?? [] { params[item.name] = item.value ?? "" }
-        guard let ip = params["ip"], isPrivateIPv4(ip),
+        let homeIP = params["ip"] ?? ""
+        let remoteIP = params["remoteIp"] ?? ""
+        let validHome = isReceiverIPv4(homeIP, remote: false)
+        let validRemote = isReceiverIPv4(remoteIP, remote: true)
+        guard (validHome || validRemote),
               let port = Int(params["port"] ?? ""), port == 8787,
               let token = params["token"], token.range(of: "^[0-9a-fA-F]{48}$", options: .regularExpression) != nil,
               let encoded = params["payload"], encoded.count <= 48000,
               let callbackString = params["callback"], let callback = URL(string: callbackString),
               callback.scheme == "https", callback.host == "businessmarketolog-web.github.io",
-              let bytes = Data(base64Encoded: encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + String(repeating: "=", count: (4 - encoded.count % 4) % 4)),
+              let bytes = Data(base64Encoded: encoded.replacingOccurrences(of: "-", with: "+")
+                .replacingOccurrences(of: "_", with: "/")
+                + String(repeating: "=", count: (4 - encoded.count % 4) % 4)),
               bytes.count <= 512 * 1024,
               let json = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
               ["zamerplus-sketchup", "zamerplus-project"].contains(json["format"] as? String ?? "")
-        else { statusText = "Ошибка настроек передачи. Проверьте IP и код приёмника."; return }
+        else { statusText = "Укажите домашний IP или адрес Tailscale и код сопряжения."; return }
 
-        guard let endpoint = URL(string: "http://\(ip):\(port)/upload") else { transferCallback(callback, status: "invalid"); return }
-        statusText = "Передаю замер на компьютер по локальной сети…"
+        // Prefer only the VPN endpoint when configured; never send to a possible
+        // address collision on a foreign Wi-Fi network without explicit home mode.
+        var addresses: [(ip: String, isRemote: Bool)] = []
+        if validRemote { addresses.append((ip: remoteIP, isRemote: true)) }
+        else if validHome { addresses.append((ip: homeIP, isRemote: false)) }
+        statusText = "Передаю замер на компьютер…"
         Task {
-            var request = URLRequest(url: endpoint)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 18
-            request.setValue(token.lowercased(), forHTTPHeaderField: "X-Zamer-Token")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = bytes
-            do {
-                let (data,response) = try await URLSession.shared.data(for: request)
-                let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                if let http = response as? HTTPURLResponse, http.statusCode == 202, result?["accepted"] as? Bool == true {
-                    statusText = "Замер принят приёмником Windows. Если SketchUp занят, он останется в очереди."
-                    transferCallback(callback, status: "accepted")
-                } else {
-                    statusText = "ПК отклонил замер. Проверьте код сопряжения и приёмник."
+            for (index, item) in addresses.enumerated() {
+                guard let endpoint = URL(string: "http://\(item.ip):\(port)/upload") else { continue }
+                var request = URLRequest(url: endpoint)
+                request.httpMethod = "POST"
+                request.timeoutInterval = item.isRemote ? 22 : 18
+                request.setValue(token.lowercased(), forHTTPHeaderField: "X-Zamer-Token")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = bytes
+                statusText = item.isRemote ? "Передаю через защищённую сеть Tailscale…" : "Пробую домашний Wi-Fi…"
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                    if let http = response as? HTTPURLResponse,
+                       http.statusCode == 202, result?["accepted"] as? Bool == true {
+                        statusText = "Скан получен компьютером и ожидает импорта в SketchUp."
+                        transferCallback(callback, status: "accepted")
+                        return
+                    }
+                    statusText = "Приёмник отклонил запрос. Проверьте код сопряжения."
                     transferCallback(callback, status: "rejected")
+                    return
+                } catch {
+                    if index == addresses.count - 1 {
+                        statusText = "Нет связи с компьютером. Проверьте Tailscale на iPhone и ПК, доступ к интернету и приёмник."
+                        transferCallback(callback, status: "offline")
+                    }
                 }
-            } catch {
-                statusText = "Не удалось подключиться к ПК: \(error.localizedDescription)"
-                transferCallback(callback, status: "offline")
             }
         }
     }
