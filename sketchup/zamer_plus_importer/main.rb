@@ -296,68 +296,11 @@ module ZamerPlus
       nil
     end
 
-    def inbox_root
-      File.join(Dir.home,'Documents','ZamerPlus')
-    end
-
-    def pending_files
-      dir=File.join(inbox_root,'Inbox')
-      return [] unless Dir.exist?(dir)
-      Dir.glob(File.join(dir,'*.zamer.json')).sort
-    end
-
-    def empty_model?(model)
-      model.path.to_s.empty? && model.entities.length == 0
-    end
-
-    def import_pending(force = false, silent = false)
-      return if @busy
-      path=pending_files.first
-      return unless path
-      model=Sketchup.active_model
-      if !empty_model?(model)
-        return unless force
-        Sketchup.file_new
-        model=Sketchup.active_model
-        return unless model.path.to_s.empty?
-        # Explicit user action: clear only the newly created template scene.
-        model.entities.erase_entities(model.entities.to_a) unless model.entities.length == 0
-      end
-      @busy=true
-      result=import_file(path,true)
-      raise 'Cannot import pending Zamer+ scan' unless result
-      output=File.join(inbox_root,'Models')
-      FileUtils.mkdir_p(output)
-      base=File.basename(path,'.zamer.json')
-      destination=File.join(output,base+'.skp')
-      raise 'SketchUp did not save the new model' unless model.save(destination)
-      completed=File.join(inbox_root,'Processed')
-      FileUtils.mkdir_p(completed)
-      FileUtils.mv(path,File.join(completed,File.basename(path)))
-      UI.messagebox('Замер+ — готово. Модель сохранена: '+destination) if force && !silent
-      destination
-    rescue => e
-      FileUtils.mkdir_p(File.join(inbox_root,'Failed'))
-      File.write(File.join(inbox_root,'Failed',File.basename(path)+'.txt'),e.message) if path
-      FileUtils.mv(path,File.join(inbox_root,'Failed',File.basename(path))) if path && File.file?(path)
-      UI.messagebox('Замер+ — ошибка импорта: '+e.message) if force && !silent
-      nil
-    ensure
-      @busy=false
-    end
-
-    def inbox_status
-      'В очереди: '+pending_files.length.to_s+' · папка '+File.join(inbox_root,'Inbox')
-    end
-
     unless file_loaded?(__FILE__)
       UI.menu('Extensions').add_item('Zamer+ — Import LiDAR JSON') do
         path=UI.openpanel('Import Zamer+ JSON', nil, 'JSON Files|*.json;*.zamer.json||')
         import_file(path) if path
       end
-      UI.menu('Extensions').add_item('Zamer+ — Импортировать входящий скан в новую модель') { import_pending(true) }
-      UI.menu('Extensions').add_item('Zamer+ — Очередь сканов') { UI.messagebox(inbox_status) }
-      UI.start_timer(4.0,true) { import_pending(false) }
       file_loaded(__FILE__)
     end
   end
