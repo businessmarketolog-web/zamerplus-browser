@@ -18,7 +18,7 @@ button{border:0;border-radius:17px;min-height:54px;padding:0 16px;font-size:17px
 .qa{margin-top:10px;padding:10px 12px;border-radius:14px;font-size:12px;font-weight:800;line-height:1.35}.qa.good{background:#edf8f1;color:#26704a}.qa.warn{background:#fff5e5;color:#8a5a00}.qa.bad{background:#fff0f0;color:#a72d2d}
 .editorList{display:grid;gap:8px;margin-top:12px}.editRow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:#f6f5f2;border-radius:14px;padding:10px 12px}.editRow small{color:#777}.editRow button{min-height:40px;font-size:13px}
 .orient{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.orient button{min-height:44px;font-size:13px}
-.fileInput{display:none}
+.fileInput{display:none}.pairPanel{padding:14px;margin-bottom:14px;background:white;border-radius:16px}.pairGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.pairGrid input{width:100%;min-width:0;border:1px solid #ddd;padding:12px;border-radius:12px;font-size:15px}.pairGrid label{font-size:12px;color:#555}.sectionNote{font-size:12px;color:#777;line-height:1.4}.smallTools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.smallTools button{font-size:13px;min-height:43px}
 
 .project{display:flex;align-items:center;gap:14px;cursor:pointer}.folder{width:50px;height:50px;border-radius:15px;background:#f2f0ed;display:grid;place-items:center;font-size:24px}.grow{flex:1}.name{font-size:20px;font-weight:900}.meta{color:var(--muted);font-size:13px;margin-top:3px}.chev{font-size:25px;color:#888}
 .roomTitle{display:flex;align-items:center;gap:10px}.roomTitle .folder{width:44px;height:44px;font-size:21px}.roomTitle .name{font-size:19px}
@@ -53,20 +53,20 @@ button{border:0;border-radius:17px;min-height:54px;padding:0 16px;font-size:17px
 <section id="projectsPage">
   <div class="pageHead"><h2>Проекты</h2></div>
   <button id="newProject" class="primary topAction">+ Новый проект</button>
-  <div class="projectTools"><button id="exportBackup" class="soft">Экспорт резервной копии</button><button id="importBackup" class="soft">Импорт резервной копии</button><button id="downloadImporter" class="dark">SketchUp импортёр</button></div>
+  <div class="projectTools"><button id="exportBackup" class="soft">Экспорт резервной копии</button><button id="importBackup" class="soft">Импорт резервной копии</button><button id="downloadImporter" class="dark">SketchUp импортёр</button><button id="downloadReceiver" class="soft">Приёмник Windows</button></div>
   <input id="backupFile" class="fileInput" type="file" accept=".zamerplus,.json,application/json">
-  <div id="projectsList"></div>
+  <div class="pairPanel"><b>Передача на ПК</b><div class="pairGrid"><label>IP компьютера<input id="pcIp" placeholder="192.168.1.20" inputmode="decimal"></label><label>Код приёмника<input id="pcCode" placeholder="Код из окна Windows" autocomplete="off"></label></div><button id="savePairing" class="soft wide">Сохранить подключение</button><p class="sectionNote">Автопередача требует обновлённый LiDAR Bridge и запущенный приёмник Windows в одной доверенной Wi-Fi сети. Ручные JSON/DAE доступны всегда.</p></div><div id="projectsList"></div>
 </section>
 
 <section id="projectPage" class="hidden">
   <div class="pageHead"><button id="backProjects" class="back">‹</button><h2 id="projectName">Проект</h2></div>
-  <button id="newRoom" class="primary topAction">+ Добавить комнату</button>
+  <button id="newRoom" class="primary topAction">+ Добавить комнату</button><div class="projectTools"><button id="projectAuto" class="primary">Весь проект → ПК</button><button id="projectManual" class="soft">Проект JSON вручную</button><button id="projectPlace" class="soft">Разместить комнаты</button></div>
   <div id="roomsList"></div>
-  <div class="note">Каждая комната хранит собственный LiDAR‑скан и экспортируется отдельной моделью .DAE.</div>
+  <div class="note">Исходные сканы, правки и история хранятся раздельно. Пока взаимная привязка не задана, комнаты общего проекта размещаются рядом условно.</div>
 </section>
 </main>
 <div id="viewer" class="viewer hidden"><div class="viewerCard"><div class="viewerHead"><h3 id="viewerTitle">LiDAR</h3><button id="closeViewer" class="closeViewer">×</button></div><div class="viewerTabs"><button data-viewmode="3d" class="active">3D</button><button data-viewmode="top">Сверху</button></div><div id="zoomControls" class="zoomControls"><button id="zoomOut" aria-label="Отдалить">−</button><div id="zoomLabel" class="zoomLabel">100%</div><button id="zoomIn" aria-label="Приблизить">+</button><button id="zoomReset" class="zoomReset">100%</button></div><div class="viewerCanvas"><svg id="viewerSvg" viewBox="0 0 420 420"></svg></div><div id="viewerHint" class="viewerHint">Проведите пальцем по модели, чтобы повернуть</div></div></div>
-<div id="toast" class="toast"></div>
+<input id="notePhotoFile" class="fileInput" type="file" accept="image/*"><div id="toast" class="toast"></div>
 <script>
 const STORE='zamerplus_projects_v1',OLD_STORE='zamerplus_lidar_only_v1';
 let state={projects:[],activeProjectId:null};
@@ -84,7 +84,7 @@ function roomByIds(pid,rid){return state.projects.find(p=>p.id===pid)?.rooms.fin
 
 function load(){
   try{let raw=localStorage.getItem(STORE);if(raw){let x=JSON.parse(raw);if(x?.projects)state=x}}catch{}
-  if(!state.projects.length){
+  if(!localStorage.getItem(STORE)&&!state.projects.length){
     try{
       let old=localStorage.getItem(OLD_STORE);
       if(old){
@@ -141,12 +141,40 @@ function analyzeScan(scan){
     if(best>120)isolated++;
   }
   if(isolated>1)warns.push('Есть разрывы между углами стен >120 мм');
+  const polygon=(scan.floorPolygon||[]).map(q=>({x:Number(q.xMm)||0,y:Number(q.zMm)||0}));
+  if(polygon.length>=3){
+    let area=0;
+    for(let i=0;i<polygon.length;i++){
+      let a=polygon[i],b=polygon[(i+1)%polygon.length];area+=a.x*b.y-b.x*a.y;
+      if(Math.hypot(a.x-b.x,a.y-b.y)<15)warns.push('Слишком близкие вершины контура пола: '+(i+1));
+    }
+    if(Math.abs(area)<100000)issues.push('Площадь контура пола почти нулевая');
+    function crosses(a,b,c,d){
+      const cr=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
+      return cr(a,b,c)*cr(a,b,d)<0&&cr(c,d,a)*cr(c,d,b)<0;
+    }
+    for(let i=0;i<polygon.length;i++)for(let j=i+2;j<polygon.length;j++){
+      if(i===0&&j===polygon.length-1)continue;
+      if(crosses(polygon[i],polygon[(i+1)%polygon.length],polygon[j],polygon[(j+1)%polygon.length]))issues.push('Контур пола самопересекается');
+    }
+  }
   let level=issues.length?'bad':warns.length?'warn':'good';
   return{level,summary:issues.length?'Есть ошибки':warns.length?'Нужно проверить':'Скан готов',issues:[...issues,...warns]};
 }
+function scanStatsHtml(scan,r){
+  const pts=(scan.floorPolygon||[]).map(q=>({x:Number(q.xMm)||0,y:Number(q.zMm)||0}));
+  let area=0;if(pts.length>=3)for(let i=0;i<pts.length;i++){let a=pts[i],b=pts[(i+1)%pts.length];area+=a.x*b.y-b.x*a.y}
+  const raw=r.scan||{},dw=Object.entries(r.edits?.walls||{}).map(([id,e])=>{
+    let orig=(raw.walls||[]).find(w=>w.id===id);if(!orig)return null;
+    let d=Number(e.widthMm)-Number(orig.widthMm);return Number.isFinite(d)&&Math.abs(d)>=1?'Стена '+((raw.walls||[]).indexOf(orig)+1)+': '+(d>0?'+':'')+Math.round(d)+' мм':'';
+  }).filter(Boolean);
+  let result=pts.length>=3?'<div class="sectionNote">Площадь по контуру: ≈ '+(Math.abs(area)/2000000).toFixed(2)+' м² (оценка LiDAR, не контрольный замер)</div>':'';
+  if(dw.length)result+='<div class="sectionNote">Правки относительно исходного скана: '+esc(dw.join(' · '))+'</div>';
+  return result;
+}
 function qaHtml(scan){
   let q=analyzeScan(scan);
-  return '<div class="qa '+q.level+'">'+q.summary+(q.issues.length?' · '+esc(q.issues.slice(0,2).join(' • ')):'')+'</div>';
+  return '<div class="qa '+q.level+'">'+q.summary+(q.issues.length?' · '+q.issues.map(x=>esc(x)).join('<br>'):'')+'</div>';
 }
 function downloadFile(file){
   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]}))return navigator.share({files:[file],title:file.name});
@@ -169,6 +197,117 @@ function importBackupFile(file){
   };
   r.readAsText(file);
 }
+function pushHistory(r,label,previous=null){
+  let snap=previous||{scan:r.scan,edits:r.edits,notes:r.notes,placement:r.placement};
+  if(!snap.scan)return;
+  r.history=r.history||[];
+  r.history.unshift({id:uid(),label,at:Date.now(),data:JSON.parse(JSON.stringify(snap))});
+  r.history=r.history.slice(0,5);
+}
+function versionDifference(current,previous){if(!current?.walls||!previous?.walls)return 'скан отсутствует';let diffs=current.walls.map((w,i)=>Math.round((Number(w.widthMm)||0)-(Number(previous.walls[i]?.widthMm)||0))).filter(v=>Math.abs(v)>=1);return diffs.length?'отличий стен: '+diffs.length+', макс. '+Math.max(...diffs.map(Math.abs))+' мм':'длины стен совпадают'}
+function showHistory(pid,rid){
+  let r=roomByIds(pid,rid),a=r?.history||[];if(!a.length)return toast('История пуста');
+  let i=Number(prompt('Выберите версию для восстановления (сравнение длин по индексам стен):\n'+a.map((v,j)=>(j+1)+'. '+new Date(v.at).toLocaleString()+' · '+v.label+' · '+versionDifference(r.scan,v.data.scan)).join('\n'),'1'))-1;
+  if(!Number.isInteger(i)||i<0||i>=a.length||!confirm('Восстановить эту версию? Текущая версия будет сохранена в истории.'))return;
+  let v=a[i];pushHistory(r,'До восстановления '+new Date(v.at).toLocaleString());
+  let previous=JSON.parse(JSON.stringify(v.data));r.scan=previous.scan||null;r.edits=previous.edits||{walls:{},openings:{},baseWallId:null,rotationQuarterTurns:0,reverseBase:false};r.notes=previous.notes||{};r.placement=previous.placement||null;
+  r.updatedAt=Date.now();save();render();toast('Версия восстановлена');
+}
+function notesHtml(r){
+  return Object.values(r.notes||{}).filter(n=>n.text||n.photo).map(n=>'<div class="sectionNote" style="margin-top:8px"><b>'+esc(n.label||'Элемент')+'</b>: '+esc(n.text||'')+(n.photo&&/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(n.photo)&&n.photo.length<250000?'<img class="notePhoto" src="'+n.photo+'" alt="Фото замера">':'')+'</div>').join('');
+}
+function editRoomNotes(pid,rid){
+  let r=roomByIds(pid,rid);if(!r?.scan)return;
+  let entries=[{id:'room',label:'Вся комната'},...r.scan.walls.map((w,i)=>({id:w.id,label:'Стена '+(i+1)})),...(r.scan.openings||[]).map((o,i)=>({id:o.id,label:(o.type==='window'?'Окно':o.type==='door'?'Дверь':'Проём')+' '+(i+1)}))];
+  let ix=Number(prompt('К какому элементу привязать заметку?\n'+entries.map((v,i)=>(i+1)+'. '+v.label).join('\n'),'1'))-1;
+  if(!Number.isInteger(ix)||ix<0||ix>=entries.length)return;
+  let target=entries[ix],old=r.notes?.[target.id]||{};
+  let text=prompt('Примечание для «'+target.label+'»',old.text||'');if(text===null)return;
+  pushHistory(r,'До изменения заметки');
+  r.notes=r.notes||{};r.notes[target.id]={...old,label:target.label,text:text.slice(0,2500)};
+  r.updatedAt=Date.now();save();render();
+  if(confirm('Добавить или заменить фотографию элемента?')){
+    const input=$('#notePhotoFile');input.onchange=async()=>{
+      let f=input.files?.[0];input.value='';if(!f)return;
+      try{
+        if(!f.type.startsWith('image/'))throw new Error('Нужен файл фотографии');
+        let bitmap=await createImageBitmap(f),canvas=document.createElement('canvas'),factor=Math.min(1,1000/Math.max(bitmap.width,bitmap.height));
+        canvas.width=Math.max(1,Math.round(bitmap.width*factor));canvas.height=Math.max(1,Math.round(bitmap.height*factor));
+        canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
+        let photo=canvas.toDataURL('image/jpeg',.63);
+        if(photo.length>115000)throw new Error('Фото слишком большое — выберите более компактное');
+        pushHistory(r,'До изменения фото');r.notes[target.id].photo=photo;r.updatedAt=Date.now();save();render();toast('Фото привязано');
+      }catch(e){toast('Фото не сохранено: '+e.message)};
+    };input.click();
+  }
+}
+function roomPayload(p,r){
+  if(!p||!r?.scan?.walls?.length)return null;
+  return{format:'zamerplus-sketchup',version:2,projectId:p.id,roomId:r.id,revisionId:String(r.updatedAt||r.scan.capturedAt||'0'),projectName:p.name,roomName:r.name,exportedAt:new Date().toISOString(),wallThicknessMm:1,scan:effectiveScan(r),notes:r.notes||{}};
+}
+function editProjectPlacement(p){
+  if(!p)return;let rooms=p.rooms.filter(r=>r.scan?.walls?.length);
+  if(!rooms.length)return toast('В проекте нет сканов');
+  if(!confirm('Позиции независимых LiDAR-сканов не совпадают автоматически. Задайте X, Y в мм и поворот каждой комнаты по контрольным замерам.'))return;
+  for(let r of rooms){
+    let old=r.placement||{xMm:0,yMm:0,rotationDeg:0};
+    let ans=prompt(r.name+' · смещение X,Y (мм) и поворот (градусы), через запятую',old.xMm+','+old.yMm+','+old.rotationDeg);
+    if(ans===null)break;
+    let a=ans.split(/[;,]/).map(x=>Number(x.trim().replace(',','.')));
+    if(a.length!==3||a.some(x=>!Number.isFinite(x))||Math.abs(a[0])>1e7||Math.abs(a[1])>1e7)return toast('Нужно 3 числа: X,Y,поворот');
+    r.placement={xMm:a[0],yMm:a[1],rotationDeg:a[2],verified:true};r.updatedAt=Date.now();
+  }
+  save();render();toast('Размещение сохранено');
+}
+function projectPayload(p){
+  if(!p)return null;let rooms=p.rooms.filter(r=>r.scan?.walls?.length);if(!rooms.length)return null;
+  let cursor=0,unverified=[];
+  let payloadRooms=rooms.map(r=>{
+    let placement=r.placement?.verified?r.placement:{xMm:cursor,yMm:0,rotationDeg:0,verified:false};
+    let scan=effectiveScan(r),lengths=scan.walls.map(w=>Number(w.widthMm)||0);
+    cursor+=Math.max(...lengths,1000)+1000;
+    if(!placement.verified)unverified.push(r.name);
+    return{roomId:r.id,roomName:r.name,revisionId:String(r.updatedAt||'0'),scan,notes:r.notes||{},placement};
+  });
+  if(unverified.length&&!confirm('ВНИМАНИЕ: взаимная привязка комнат «'+unverified.join(', ')+'» не подтверждена. Они будут размещены рядом условно, НЕ как точный план объекта. Продолжить?'))return null;
+  return{format:'zamerplus-project',version:1,projectId:p.id,projectName:p.name,exportedAt:new Date().toISOString(),wallThicknessMm:1,rooms:payloadRooms};
+}
+async function exportProjectJson(p){
+  let payload=projectPayload(p);if(!payload)return;
+  try{await downloadFile(new File([JSON.stringify(payload,null,2)],clean(p.name)+'__all_rooms.zamer.json',{type:'application/json'}));toast('JSON всего проекта создан')}catch(e){if(e?.name!=='AbortError')toast('Не удалось сохранить JSON')}
+}
+
+function privateIP(ip){
+  let a=ip.split('.').map(Number);
+  if(a.length!==4||ip.split('.').some(x=>!/^\d{1,3}$/.test(x))||a.some(n=>n<0||n>255))return false;
+  return a[0]===10||(a[0]===192&&a[1]===168)||(a[0]===172&&a[1]>=16&&a[1]<=31);
+}
+function utf8Base64url(value){
+  const bytes=new TextEncoder().encode(value);let result='';
+  for(let i=0;i<bytes.length;i+=8192)result+=String.fromCharCode(...bytes.subarray(i,i+8192));
+  return btoa(result).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function sendToPc(payload){
+  if(!payload)return toast('Нет готового LiDAR-скана для передачи');
+  let ip=localStorage.getItem('zp_pc_ip')||'',code=localStorage.getItem('zp_pc_code')||'';
+  if(!privateIP(ip)||!/^[-a-fA-F0-9]{32,128}$/.test(code))return toast('Сначала укажите IP и код приёмника в разделе «Проекты»');
+  const encoded=utf8Base64url(JSON.stringify(payload));
+  if(encoded.length>48000)return toast('Проект слишком большой для прямой отправки. Воспользуйтесь ручным JSON');
+  const back=location.origin+location.pathname,requestId=uid();
+  sessionStorage.setItem('zp_send_pending',JSON.stringify({requestId,startedAt:Date.now()}));
+  const args=new URLSearchParams({ip,port:'8787',token:code,payload:encoded,callback:back,requestId});
+  location.href='zamerpluslidar://send?'+args.toString();
+}
+function processSendHash(){
+  let h=location.hash||'',m=h.match(/(?:^#|&)zamerplus_transfer=([^&]+)/);
+  if(!m)return;
+  history.replaceState(null,'',location.pathname+location.search);
+  let result=decodeURIComponent(m[1]);
+  let pending=sessionStorage.getItem('zp_send_pending');sessionStorage.removeItem('zp_send_pending');
+  if(result==='accepted')toast('Скан принят приёмником ПК. SketchUp импортирует его в пустой модели либо оставит в очереди.');
+  else toast('Автопередача не выполнена ('+result+'). Используйте JSON вручную или проверьте ПК и Wi-Fi.');
+}
+
 function render(){
   let p=activeProject();
   $('#projectsPage').classList.toggle('hidden',!!p);
@@ -196,12 +335,17 @@ function renderRooms(p){
     let ok=!!r.scan?.walls?.length,st=r.scan?.capturedAt?new Date(r.scan.capturedAt).toLocaleString():'',scan=ok?effectiveScan(r):null;
     return '<div class="card"><div class="roomTitle"><div class="folder">📂</div><div class="grow"><div class="name">'+esc(r.name)+'</div><div class="meta">'+(ok?'LiDAR '+esc(st):'скан ещё не выполнен')+'</div></div></div>'+
       '<div class="status"><span class="dot '+(ok?'good':'')+'"></span><span>'+(ok?'модель готова к просмотру и экспорту':'ожидает LiDAR‑скан')+'</span></div>'+
-      (ok?qaHtml(scan):'')+
+      (ok?qaHtml(scan)+scanStatsHtml(scan,r):'')+
       (ok?'<div class="metrics"><div class="metric"><b>'+scan.walls.length+'</b><span>стен</span></div><div class="metric"><b>'+(scan.openings?.length||0)+'</b><span>проёмов</span></div><div class="metric"><b>'+(scan.heightMm||0)+'</b><span>высота, мм</span></div></div>':'')+
-      '<div class="actions"><button class="primary" data-scan="'+r.id+'">'+(ok?'Пересканировать LiDAR':'Сканировать LiDAR')+'</button><button class="soft" data-view="'+r.id+'" '+(ok?'':'disabled')+'>Просмотреть LiDAR</button><button class="dark" data-export="'+r.id+'" '+(ok?'':'disabled')+'>Передать в SketchUp .DAE</button><button class="soft" data-export-json="'+r.id+'" '+(ok?'':'disabled')+'>SketchUp JSON</button></div>'+
-      (ok?'<div class="manage"><button class="soft" data-edit="'+r.id+'">Корректировать размеры</button><button class="soft" data-orient="'+r.id+'">Ориентация SketchUp</button><button class="danger" data-reset-edits="'+r.id+'">Сбросить корректировки</button><button class="danger" data-delete-scan="'+r.id+'">Удалить LiDAR‑скан</button><button class="danger" data-delete-room="'+r.id+'">Удалить комнату</button></div>':'<div class="manage"><button class="danger" data-delete-room="'+r.id+'">Удалить комнату</button></div>')+
+      '<div class="actions"><button class="primary" data-scan="'+r.id+'">'+(ok?'Пересканировать LiDAR':'Сканировать LiDAR')+'</button><button class="soft" data-view="'+r.id+'" '+(ok?'':'disabled')+'>Просмотреть LiDAR</button><button class="primary" data-auto="'+r.id+'" '+(ok?'':'disabled')+'>Передать автоматически → ПК</button><button class="soft" data-export-json="'+r.id+'" '+(ok?'':'disabled')+'>JSON вручную</button><button class="soft" data-export="'+r.id+'" '+(ok?'':'disabled')+'>DAE вручную</button></div>'+
+      (ok?'<div class="manage"><button class="soft" data-edit="'+r.id+'">Корректировать размеры</button><button class="soft" data-orient="'+r.id+'">Ориентация SketchUp</button><button class="danger" data-reset-edits="'+r.id+'">Сбросить корректировки</button><button class="danger" data-delete-scan="'+r.id+'">Удалить LiDAR-скан</button><button class="danger" data-delete-room="'+r.id+'">Удалить комнату</button></div>':'<div class="manage"><button class="danger" data-delete-room="'+r.id+'">Удалить комнату</button></div>')+
+      '<div class="smallTools"><button class="soft" data-notes="'+r.id+'" '+(ok?'':'disabled')+'>Фото и заметки</button><button class="soft" data-history="'+r.id+'" '+(r.history?.length?'':'disabled')+'>История · '+(r.history?.length||0)+'</button></div>'+
+      (ok?notesHtml(r):'')+
       '</div>';
   }).join('');
+  root.querySelectorAll('[data-auto]').forEach(el=>el.onclick=()=>sendToPc(roomPayload(p,roomByIds(p.id,el.dataset.auto))));
+  root.querySelectorAll('[data-notes]').forEach(el=>el.onclick=()=>editRoomNotes(p.id,el.dataset.notes));
+  root.querySelectorAll('[data-history]').forEach(el=>el.onclick=()=>showHistory(p.id,el.dataset.history));
   root.querySelectorAll('[data-scan]').forEach(el=>el.onclick=()=>launchLidar(p.id,el.dataset.scan));
   root.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>openViewer(p.id,el.dataset.view));
   root.querySelectorAll('[data-export]').forEach(el=>el.onclick=()=>exportSketchUp(p.id,el.dataset.export));
@@ -216,6 +360,7 @@ function renderRooms(p){
 function editRoomGeometry(projectId,roomId){
   let r=roomByIds(projectId,roomId);if(!r?.scan)return;
   let e=roomEdits(r),scan=effectiveScan(r);
+  const previous={scan:r.scan,edits:JSON.parse(JSON.stringify(r.edits)),notes:r.notes,placement:r.placement};
   let choices=scan.walls.map((w,i)=>(i+1)+': стена '+Math.round(Number(w.widthMm)||0)+' мм').join('\n');
   let idx=parseInt(prompt('Какую стену изменить?\n'+choices,'1'),10)-1;
   if(!Number.isInteger(idx)||idx<0||idx>=scan.walls.length)return;
@@ -241,23 +386,24 @@ function editRoomGeometry(projectId,roomId){
       }
     }
   }
-  r.updatedAt=Date.now();save();render();toast('Корректировки сохранены');
+  pushHistory(r,'До правки размеров',previous);r.updatedAt=Date.now();save();render();toast('Корректировки сохранены');
 }
 function editOrientation(projectId,roomId){
   let r=roomByIds(projectId,roomId);if(!r?.scan)return;
   let e=roomEdits(r),scan=effectiveScan(r);
+  const previous={scan:r.scan,edits:JSON.parse(JSON.stringify(r.edits)),notes:r.notes,placement:r.placement};
   let current=scan.walls.findIndex(w=>w.id===e.baseWallId);
   let idx=parseInt(prompt('Базовая стена для SketchUp (идёт от 0,0 по +X):\n'+scan.walls.map((w,i)=>(i+1)+': '+Math.round(Number(w.widthMm)||0)+' мм'+(i===current?' ← текущая':'')).join('\n'),String(current>=0?current+1:1)),10)-1;
   if(Number.isInteger(idx)&&idx>=0&&idx<scan.walls.length)e.baseWallId=scan.walls[idx].id;
   let rot=parseInt(prompt('Поворот модели: 0, 90, 180 или 270 градусов',String(((e.rotationQuarterTurns||0)*90)%360)),10);
   if([0,90,180,270].includes(rot))e.rotationQuarterTurns=rot/90;
   e.reverseBase=confirm('Развернуть направление базовой стены?\nOK = развернуть, Отмена = оставить обычное направление');
-  save();render();toast('Ориентация SketchUp сохранена');
+  pushHistory(r,'До правки ориентации',previous);save();render();toast('Ориентация SketchUp сохранена');
 }
 function resetEdits(projectId,roomId){
   let r=roomByIds(projectId,roomId);if(!r)return;
   if(!confirm('Сбросить все ручные корректировки и ориентацию этой комнаты?'))return;
-  r.edits={walls:{},openings:{},baseWallId:null,rotationQuarterTurns:0,reverseBase:false};save();render();toast('Корректировки сброшены');
+  pushHistory(r,'До сброса корректировок');r.edits={walls:{},openings:{},baseWallId:null,rotationQuarterTurns:0,reverseBase:false};save();render();toast('Корректировки сброшены');
 }
 
 function deleteProject(id){
@@ -305,6 +451,7 @@ function importLidar(payload){
   sessionStorage.removeItem('zp_lidar_target');
   let room=target&&roomByIds(target.projectId,target.roomId);
   if(!room){toast('Не найдена комната для сохранения скана');return}
+  if(room.scan)pushHistory(room,'До повторного сканирования');
   room.scan=payload;room.edits={walls:{},openings:{},baseWallId:null,rotationQuarterTurns:0,reverseBase:false};room.updatedAt=Date.now();state.activeProjectId=target.projectId;save();render();
   let q=analyzeScan(effectiveScan(room));toast(q.level==='good'?'Скан сохранён · контроль качества пройден':'Скан сохранён · '+q.summary);
 }
@@ -602,15 +749,7 @@ function $$(q){return [...document.querySelectorAll(q)]}
 async function exportSketchUpJson(projectId,roomId){
   let p=state.projects.find(x=>x.id===projectId),r=roomByIds(projectId,roomId);
   if(!r?.scan?.walls?.length)return toast('Сначала выполните LiDAR‑скан');
-  let scan=effectiveScan(r),payload={
-    format:'zamerplus-sketchup',
-    version:1,
-    projectName:p?.name||'Проект',
-    roomName:r.name,
-    exportedAt:new Date().toISOString(),
-    wallThicknessMm:1,
-    scan
-  };
+  let payload=roomPayload(p,r);
   let name=clean(p?.name)+'__'+clean(r.name)+'.zamer.json';
   let file=new File([JSON.stringify(payload,null,2)],name,{type:'application/json'});
   try{await downloadFile(file);toast('SketchUp JSON создан')}catch(e){if(e?.name!=='AbortError')toast('Ошибка экспорта JSON')}
@@ -627,18 +766,22 @@ async function exportSketchUp(projectId,roomId){
   toast('Файл .DAE создан');
 }
 
+$('#pcIp').value=localStorage.getItem('zp_pc_ip')||'';$('#pcCode').value=localStorage.getItem('zp_pc_code')||'';
+$('#savePairing').onclick=()=>{let ip=$('#pcIp').value.trim(),code=$('#pcCode').value.trim();if(!privateIP(ip)||!/^[-a-fA-F0-9]{32,128}$/.test(code))return toast('Укажите локальный IPv4 и код приёмника');localStorage.setItem('zp_pc_ip',ip);localStorage.setItem('zp_pc_code',code);toast('Подключение сохранено')};
+$('#projectManual').onclick=()=>exportProjectJson(activeProject());$('#projectAuto').onclick=()=>sendToPc(projectPayload(activeProject()));$('#projectPlace').onclick=()=>editProjectPlacement(activeProject());
 $('#newProject').onclick=createProject;
 $('#newRoom').onclick=createRoom;
 $('#backProjects').onclick=()=>{state.activeProjectId=null;save();render()};
 $('#exportBackup').onclick=exportBackup;
 $('#importBackup').onclick=()=>$('#backupFile').click();
 $('#backupFile').onchange=e=>{let f=e.target.files?.[0];if(f)importBackupFile(f);e.target.value=''};
-$('#downloadImporter').onclick=()=>{location.href='ZamerPlusImporter.rbz'};
+$('#downloadImporter').onclick=()=>{location.href='ZamerPlusImporter.rbz'};$('#downloadReceiver').onclick=()=>{location.href='ZamerPlusReceiver_Windows.zip'};
 
 
 load();
 bindViewer();
 processLidarHash();
+processSendHash();
 render();
 </script>
 </body>
