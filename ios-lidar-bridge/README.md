@@ -32,3 +32,10 @@ The installed iOS helper also accepts a `zamerpluslidar://send?...` URL from a r
 Use only on a trusted private Wi-Fi network. The LAN HTTP transport is not encrypted; do not forward the receiver port through the router or expose it on public Wi-Fi. Payloads exceeding the custom-URL limit must use the existing manual JSON workflow.
 
 Version 1.4 requires an IPA rebuild and a SideStore update on the iPhone; the older installed v1.3 app does not have the `send` handler. Existing RoomPlan scans remain intact after updating.
+
+
+### Version 1.5: remote Tailscale transfer
+
+The deep link optionally accepts `remoteIp` in the Tailscale CGNAT IPv4 range `100.64.0.0/10`. The iOS helper sends only to the explicitly selected address: the remote Tailscale IP (22-second timeout) or an allowed home RFC1918 address (18-second timeout). It never falls back to an untrusted local address when remote mode is selected. Install and sign in to Tailscale on iPhone and Windows in the same private tailnet; the payload is encrypted on the WireGuard transport. The Windows receiver additionally requires its existing 48-hex pairing code and queues incoming scans without overwriting an active SketchUp model.
+
+Version 1.5 must be built as a new IPA and updated through SideStore. Manual JSON/DAE export remains independent of VPN and the receiver.
