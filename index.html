@@ -18,7 +18,7 @@ button{border:0;border-radius:17px;min-height:54px;padding:0 16px;font-size:17px
 .qa{margin-top:10px;padding:10px 12px;border-radius:14px;font-size:12px;font-weight:800;line-height:1.35}.qa.good{background:#edf8f1;color:#26704a}.qa.warn{background:#fff5e5;color:#8a5a00}.qa.bad{background:#fff0f0;color:#a72d2d}
 .editorList{display:grid;gap:8px;margin-top:12px}.editRow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:#f6f5f2;border-radius:14px;padding:10px 12px}.editRow small{color:#777}.editRow button{min-height:40px;font-size:13px}
 .orient{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}.orient button{min-height:44px;font-size:13px}
-.fileInput{display:none}.pairPanel{padding:14px;margin-bottom:14px;background:white;border-radius:16px}.pairGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.pairGrid input,.pairGrid select{width:100%;min-width:0;border:1px solid #ddd;padding:12px;border-radius:12px;font-size:15px}.pairGrid label{font-size:12px;color:#555}.sectionNote{font-size:12px;color:#777;line-height:1.4}.smallTools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.smallTools button{font-size:13px;min-height:43px}
+.fileInput{display:none}.sectionNote{font-size:12px;color:#777;line-height:1.4}.smallTools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.smallTools button{font-size:13px;min-height:43px}
 
 .project{display:flex;align-items:center;gap:14px;cursor:pointer}.folder{width:50px;height:50px;border-radius:15px;background:#f2f0ed;display:grid;place-items:center;font-size:24px}.grow{flex:1}.name{font-size:20px;font-weight:900}.meta{color:var(--muted);font-size:13px;margin-top:3px}.chev{font-size:25px;color:#888}
 .roomTitle{display:flex;align-items:center;gap:10px}.roomTitle .folder{width:44px;height:44px;font-size:21px}.roomTitle .name{font-size:19px}
@@ -53,14 +53,14 @@ button{border:0;border-radius:17px;min-height:54px;padding:0 16px;font-size:17px
 <section id="projectsPage">
   <div class="pageHead"><h2>Проекты</h2></div>
   <button id="newProject" class="primary topAction">+ Новый проект</button>
-  <div class="projectTools"><button id="exportBackup" class="soft">Экспорт резервной копии</button><button id="importBackup" class="soft">Импорт резервной копии</button><button id="downloadImporter" class="dark">SketchUp импортёр</button><button id="downloadReceiver" class="soft">Приёмник Windows</button></div>
+  <div class="projectTools"><button id="exportBackup" class="soft">Экспорт резервной копии</button><button id="importBackup" class="soft">Импорт резервной копии</button><button id="downloadImporter" class="dark">SketchUp импортёр</button></div>
   <input id="backupFile" class="fileInput" type="file" accept=".zamerplus,.json,application/json">
-  <div class="pairPanel"><b>Передача на ПК</b><div class="pairGrid"><label>IP домашней сети<input id="pcIp" placeholder="192.168.1.83" inputmode="decimal"></label><label>Удалённый IP Tailscale<input id="pcRemoteIp" placeholder="100.x.x.x" inputmode="decimal"></label><label>Код приёмника<input id="pcCode" placeholder="Код из окна Windows" autocomplete="off"></label><label>Канал отправки<select id="pcTransferMode"><option value="remote">Из любой сети · Tailscale</option><option value="home">Только домашний Wi-Fi</option></select></label></div><button id="savePairing" class="soft wide">Сохранить подключение</button><p class="sectionNote">Дома подключение через Wi-Fi, вне дома — через зашифрованную сеть Tailscale на iPhone и ПК. Выберите Tailscale для работы в любой сети; домашний адрес используйте только дома. Ручной JSON/DAE доступен всегда. Для удалённой передачи требуется LiDAR Bridge 1.5.</p></div><div id="projectsList"></div>
+  <div class="note">Ручная передача: сохраните JSON или DAE на iPhone, передайте файл на ПК и откройте его в SketchUp 2026. Автоматическое соединение с ПК отключено.</div><div id="projectsList"></div>
 </section>
 
 <section id="projectPage" class="hidden">
   <div class="pageHead"><button id="backProjects" class="back">‹</button><h2 id="projectName">Проект</h2></div>
-  <button id="newRoom" class="primary topAction">+ Добавить комнату</button><div class="projectTools"><button id="projectAuto" class="primary">Весь проект → ПК</button><button id="projectManual" class="soft">Проект JSON вручную</button><button id="projectPlace" class="soft">Разместить комнаты</button></div>
+  <button id="newRoom" class="primary topAction">+ Добавить комнату</button><div class="projectTools"><button id="projectManual" class="soft">Проект JSON вручную</button><button id="projectPlace" class="soft">Разместить комнаты</button></div>
   <div id="roomsList"></div>
   <div class="note">Исходные сканы, правки и история хранятся раздельно. Пока взаимная привязка не задана, комнаты общего проекта размещаются рядом условно.</div>
 </section>
@@ -288,41 +288,6 @@ async function exportProjectJson(p){
   try{await downloadFile(new File([JSON.stringify(payload,null,2)],clean(p.name)+'__all_rooms.zamer.json',{type:'application/json'}));toast('JSON всего проекта создан')}catch(e){if(e?.name!=='AbortError')toast('Не удалось сохранить JSON')}
 }
 
-function allowedReceiverIP(ip,remote=false){
-  let pieces=ip.split('.');
-  if(pieces.length!==4||pieces.some(x=>x.length<1||x.length>3||![...x].every(c=>c>='0'&&c<='9')))return false;
-  let a=pieces.map(Number);
-  if(a.some(n=>n<0||n>255))return false;
-  if(remote)return a[0]===100&&a[1]>=64&&a[1]<=127;
-  return a[0]===10||(a[0]===192&&a[1]===168)||(a[0]===172&&a[1]>=16&&a[1]<=31);
-}
-function utf8Base64url(value){
-  const bytes=new TextEncoder().encode(value);let result='';
-  for(let i=0;i<bytes.length;i+=8192)result+=String.fromCharCode(...bytes.subarray(i,i+8192));
-  return btoa(result).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-function sendToPc(payload){
-  if(!payload)return toast('Нет готового LiDAR-скана для передачи');
-  let ip=localStorage.getItem('zp_pc_ip')||'',remoteIp=localStorage.getItem('zp_pc_remote_ip')||'',code=localStorage.getItem('zp_pc_code')||'';
-  let mode=localStorage.getItem('zp_pc_mode')||(allowedReceiverIP(remoteIp,true)?'remote':'home');
-  if((mode==='remote'&&!allowedReceiverIP(remoteIp,true))||(mode==='home'&&!allowedReceiverIP(ip))||!/^[-a-fA-F0-9]{32,128}$/.test(code))return toast('Проверьте выбранный канал, IP и код в разделе «Проекты»');
-  const encoded=utf8Base64url(JSON.stringify(payload));
-  if(encoded.length>48000)return toast('Проект слишком большой для прямой отправки. Воспользуйтесь ручным JSON');
-  const back=location.origin+location.pathname,requestId=uid();
-  sessionStorage.setItem('zp_send_pending',JSON.stringify({requestId,startedAt:Date.now()}));
-  const args=new URLSearchParams({ip:mode==='home'?ip:'',remoteIp:mode==='remote'?remoteIp:'',port:'8787',token:code,payload:encoded,callback:back,requestId});
-  location.href='zamerpluslidar://send?'+args.toString();
-}
-function processSendHash(){
-  let h=location.hash||'',m=h.match(/(?:^#|&)zamerplus_transfer=([^&]+)/);
-  if(!m)return;
-  history.replaceState(null,'',location.pathname+location.search);
-  let result=decodeURIComponent(m[1]);
-  let pending=sessionStorage.getItem('zp_send_pending');sessionStorage.removeItem('zp_send_pending');
-  if(result==='accepted')toast('Скан принят приёмником ПК. SketchUp импортирует его в пустой модели либо оставит в очереди.');
-  else toast('Автопередача не выполнена ('+result+'). Используйте JSON вручную или проверьте ПК и Wi-Fi.');
-}
-
 function render(){
   let p=activeProject();
   $('#projectsPage').classList.toggle('hidden',!!p);
@@ -352,13 +317,12 @@ function renderRooms(p){
       '<div class="status"><span class="dot '+(ok?'good':'')+'"></span><span>'+(ok?'модель готова к просмотру и экспорту':'ожидает LiDAR‑скан')+'</span></div>'+
       (ok?qaHtml(scan)+scanStatsHtml(scan,r):'')+
       (ok?'<div class="metrics"><div class="metric"><b>'+scan.walls.length+'</b><span>стен</span></div><div class="metric"><b>'+(scan.openings?.length||0)+'</b><span>проёмов</span></div><div class="metric"><b>'+(scan.heightMm||0)+'</b><span>высота, мм</span></div></div>':'')+
-      '<div class="actions"><button class="primary" data-scan="'+r.id+'">'+(ok?'Пересканировать LiDAR':'Сканировать LiDAR')+'</button><button class="soft" data-view="'+r.id+'" '+(ok?'':'disabled')+'>Просмотреть LiDAR</button><button class="primary" data-auto="'+r.id+'" '+(ok?'':'disabled')+'>Передать автоматически → ПК</button><button class="soft" data-export-json="'+r.id+'" '+(ok?'':'disabled')+'>JSON вручную</button><button class="soft" data-export="'+r.id+'" '+(ok?'':'disabled')+'>DAE вручную</button></div>'+
+      '<div class="actions"><button class="primary" data-scan="'+r.id+'">'+(ok?'Пересканировать LiDAR':'Сканировать LiDAR')+'</button><button class="soft" data-view="'+r.id+'" '+(ok?'':'disabled')+'>Просмотреть LiDAR</button><button class="soft" data-export-json="'+r.id+'" '+(ok?'':'disabled')+'>JSON вручную</button><button class="soft" data-export="'+r.id+'" '+(ok?'':'disabled')+'>DAE вручную</button></div>'+
       (ok?'<div class="manage"><button class="soft" data-edit="'+r.id+'">Корректировать размеры</button><button class="soft" data-orient="'+r.id+'">Ориентация SketchUp</button><button class="danger" data-reset-edits="'+r.id+'">Сбросить корректировки</button><button class="danger" data-delete-scan="'+r.id+'">Удалить LiDAR-скан</button><button class="danger" data-delete-room="'+r.id+'">Удалить комнату</button></div>':'<div class="manage"><button class="danger" data-delete-room="'+r.id+'">Удалить комнату</button></div>')+
       '<div class="smallTools"><button class="soft" data-notes="'+r.id+'" '+(ok?'':'disabled')+'>Фото и заметки</button><button class="soft" data-history="'+r.id+'" '+(r.history?.length?'':'disabled')+'>История · '+(r.history?.length||0)+'</button></div>'+
       (ok?notesHtml(r):'')+
       '</div>';
   }).join('');
-  root.querySelectorAll('[data-auto]').forEach(el=>el.onclick=()=>sendToPc(roomPayload(p,roomByIds(p.id,el.dataset.auto))));
   root.querySelectorAll('[data-notes]').forEach(el=>el.onclick=()=>editRoomNotes(p.id,el.dataset.notes));
   root.querySelectorAll('[data-history]').forEach(el=>el.onclick=()=>showHistory(p.id,el.dataset.history));
   root.querySelectorAll('[data-scan]').forEach(el=>el.onclick=()=>launchLidar(p.id,el.dataset.scan));
@@ -781,22 +745,21 @@ async function exportSketchUp(projectId,roomId){
   toast('Файл .DAE создан');
 }
 
-$('#pcIp').value=localStorage.getItem('zp_pc_ip')||'';$('#pcRemoteIp').value=localStorage.getItem('zp_pc_remote_ip')||'';$('#pcCode').value=localStorage.getItem('zp_pc_code')||'';$('#pcTransferMode').value=localStorage.getItem('zp_pc_mode')||(allowedReceiverIP($('#pcRemoteIp').value,true)?'remote':'home');
-$('#savePairing').onclick=()=>{let ip=$('#pcIp').value.trim(),remoteIp=$('#pcRemoteIp').value.trim(),code=$('#pcCode').value.trim(),mode=$('#pcTransferMode').value;if((mode==='home'&&!allowedReceiverIP(ip))||(mode==='remote'&&!allowedReceiverIP(remoteIp,true))||(ip&&!allowedReceiverIP(ip))||(remoteIp&&!allowedReceiverIP(remoteIp,true))||!/^[-a-fA-F0-9]{32,128}$/.test(code))return toast('Проверьте выбранный канал, IP и код приёмника');localStorage.setItem('zp_pc_ip',ip);localStorage.setItem('zp_pc_remote_ip',remoteIp);localStorage.setItem('zp_pc_mode',mode);localStorage.setItem('zp_pc_code',code);toast('Подключение сохранено: '+(mode==='remote'?'Tailscale':'домашний Wi-Fi'))};
-$('#projectManual').onclick=()=>exportProjectJson(activeProject());$('#projectAuto').onclick=()=>sendToPc(projectPayload(activeProject()));$('#projectPlace').onclick=()=>editProjectPlacement(activeProject());
+$('#projectManual').onclick=()=>exportProjectJson(activeProject());$('#projectPlace').onclick=()=>editProjectPlacement(activeProject());
 $('#newProject').onclick=createProject;
 $('#newRoom').onclick=createRoom;
 $('#backProjects').onclick=()=>{state.activeProjectId=null;save();render()};
 $('#exportBackup').onclick=exportBackup;
 $('#importBackup').onclick=()=>$('#backupFile').click();
 $('#backupFile').onchange=e=>{let f=e.target.files?.[0];if(f)importBackupFile(f);e.target.value=''};
-$('#downloadImporter').onclick=()=>{location.href='ZamerPlusImporter.rbz'};$('#downloadReceiver').onclick=()=>{location.href='ZamerPlusReceiver_Windows.zip'};
+$('#downloadImporter').onclick=()=>{location.href='ZamerPlusImporter.rbz'};
 
 
+for(const key of ['zp_pc_ip','zp_pc_remote_ip','zp_pc_code','zp_pc_mode'])localStorage.removeItem(key);
+sessionStorage.removeItem('zp_send_pending');
 load();
 bindViewer();
 processLidarHash();
-processSendHash();
 render();
 </script>
 </body>
