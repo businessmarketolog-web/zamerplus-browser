@@ -1,0 +1,35 @@
+name: Verify Zamer+ importer and web app
+on:
+  push:
+    paths:
+      - 'index.html'
+      - 'sketchup/**'
+      - 'desktop-receiver/**'
+      - 'tests/**'
+      - '.github/workflows/check-zamer.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JavaScript syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          Path('/tmp/zamer-web.js').write_text(s.split('<script>')[-1].split('</script>')[0],encoding='utf-8')
+          PY
+          node --check /tmp/zamer-web.js
+          node --check desktop-receiver/receiver.js
+      - name: Web and LAN receiver tests
+        run: |
+          node tests/web.test.js
+          node tests/receiver.test.js
+      - name: Ruby syntax and coordinate orientation
+        run: |
+          ruby -c sketchup/zamer_plus_importer.rb
+          ruby -c sketchup/zamer_plus_importer/main.rb
+          ruby -I tests tests/transform.test.rb
