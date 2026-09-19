@@ -21,5 +21,7 @@ let check=analyzeScan(s);if(check.level!=='good')throw Error(JSON.stringify(chec
 let h=buildDAE(s);if(!h.includes('meter="0.001"')||!h.includes('Z_UP')||!h.includes('floor_1'))throw Error('DAE regression');
 pushHistory(r1,'before edit');r1.scan=null;showHistory('p','r1');
 if(!r1.scan?.walls?.length)throw Error('history restore failed');
+deleteScan('p','r1');if(r1.scan!==null||!r1.history?.length)throw Error('delete scan did not preserve history');
+showHistory('p','r1');if(!r1.scan?.walls?.length)throw Error('deleted scan could not be restored');
 console.log('PASS: raw scan preserved, effective corrections applied, rooms separated, QA, DAE, version restore');
 `,ctx);
