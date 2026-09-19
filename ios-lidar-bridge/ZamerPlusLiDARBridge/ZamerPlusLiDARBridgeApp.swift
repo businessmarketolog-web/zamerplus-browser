@@ -26,6 +26,10 @@ final class BridgeCoordinator: ObservableObject {
     @Published var statusText = "Откройте Замер+ в Safari и нажмите «Сканировать LiDAR»."
 
     func handle(url: URL) {
+        if url.scheme?.lowercased() == "zamerpluslidar" && url.host?.lowercased() == "send" {
+            handleSend(url: url)
+            return
+        }
         guard url.scheme?.lowercased() == "zamerpluslidar",
               url.host?.lowercased() == "scan",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -39,6 +43,65 @@ final class BridgeCoordinator: ObservableObject {
 
         statusText = "Запуск RoomPlan…"
         scanRequest = ScanRequest(id: requestId, callback: callback)
+    }
+
+    private func isPrivateIPv4(_ ip: String) -> Bool {
+        let parts = ip.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        let values = parts.compactMap { part -> Int? in
+            guard part.count <= 3, !part.isEmpty, part.allSatisfy({ $0.isNumber }), let n = Int(part), (0...255).contains(n) else { return nil }
+            return n
+        }
+        guard values.count == 4 else { return false }
+        return values[0] == 10 || (values[0] == 192 && values[1] == 168) || (values[0] == 172 && (16...31).contains(values[1]))
+    }
+
+    private func transferCallback(_ callback: URL, status: String) {
+        var parts = URLComponents(url: callback, resolvingAgainstBaseURL: false)
+        parts?.fragment = "zamerplus_transfer=\(status)"
+        if let url = parts?.url { UIApplication.shared.open(url) }
+    }
+
+    private func handleSend(url: URL) {
+        guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { statusText = "Некорректная ссылка передачи"; return }
+        var params: [String: String] = [:]
+        for item in c.queryItems ?? [] { params[item.name] = item.value ?? "" }
+        guard let ip = params["ip"], isPrivateIPv4(ip),
+              let port = Int(params["port"] ?? ""), port == 8787,
+              let token = params["token"], token.range(of: "^[0-9a-fA-F]{48}$", options: .regularExpression) != nil,
+              let encoded = params["payload"], encoded.count <= 48000,
+              let callbackString = params["callback"], let callback = URL(string: callbackString),
+              callback.scheme == "https", callback.host == "businessmarketolog-web.github.io",
+              let bytes = Data(base64Encoded: encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + String(repeating: "=", count: (4 - encoded.count % 4) % 4)),
+              bytes.count <= 512 * 1024,
+              let json = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+              ["zamerplus-sketchup", "zamerplus-project"].contains(json["format"] as? String ?? "")
+        else { statusText = "Ошибка настроек передачи. Проверьте IP и код приёмника."; return }
+
+        guard let endpoint = URL(string: "http://\(ip):\(port)/upload") else { transferCallback(callback, status: "invalid"); return }
+        statusText = "Передаю замер на компьютер по локальной сети…"
+        Task {
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 18
+            request.setValue(token.lowercased(), forHTTPHeaderField: "X-Zamer-Token")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = bytes
+            do {
+                let (data,response) = try await URLSession.shared.data(for: request)
+                let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                if let http = response as? HTTPURLResponse, http.statusCode == 202, result?["accepted"] as? Bool == true {
+                    statusText = "Замер принят приёмником Windows. Если SketchUp занят, он останется в очереди."
+                    transferCallback(callback, status: "accepted")
+                } else {
+                    statusText = "ПК отклонил замер. Проверьте код сопряжения и приёмник."
+                    transferCallback(callback, status: "rejected")
+                }
+            } catch {
+                statusText = "Не удалось подключиться к ПК: \(error.localizedDescription)"
+                transferCallback(callback, status: "offline")
+            }
+        }
     }
 
     func complete(request: ScanRequest, payload: [String: Any]) {
@@ -147,7 +210,7 @@ struct BridgeHomeView: View {
                 .buttonStyle(.borderedProminent)
                 .padding(.horizontal, 28)
 
-                Text("Helper нужен только для RoomPlan/LiDAR. Основной интерфейс, объекты, Bosch и экспорт остаются в Safari.")
+                Text("LiDAR-сканирование и прямая передача на приёмник SketchUp по локальной сети. Ручной JSON/DAE доступен в Safari.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
