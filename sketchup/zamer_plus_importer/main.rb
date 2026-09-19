@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 require 'sketchup.rb'
 require 'json'
+require 'fileutils'
+require 'base64'
+require 'digest'
 
 module ZamerPlus
   module Importer
@@ -101,24 +104,20 @@ module ZamerPlus
       end
     end
 
-    def import_file(path)
-      payload = JSON.parse(File.read(path, encoding:'UTF-8'))
-      raise 'Not a Zamer+ SketchUp JSON file' unless payload['format'] == 'zamerplus-sketchup'
+    def import_room(payload, model, container = nil, source = 'manual')
       scan = payload['scan'] || {}
       walls = scan['walls'] || []
       raise 'No walls in scan' if walls.empty?
-
-      model = Sketchup.active_model
-      model.start_operation('Import Zamer+ LiDAR', true)
-
       walls_tag = model.layers['Zamer+ Walls'] || model.layers.add('Zamer+ Walls')
       floor_tag = model.layers['Zamer+ Floor'] || model.layers.add('Zamer+ Floor')
       dims_tag  = model.layers['Zamer+ Dimensions'] || model.layers.add('Zamer+ Dimensions')
-
-      root = model.active_entities.add_group
+      root = (container ? container.entities : model.active_entities).add_group
       root.name = "#{payload['projectName']} — #{payload['roomName']}"
-      root.set_attribute('ZamerPlus','source',path)
+      root.set_attribute('ZamerPlus','source',source)
       root.set_attribute('ZamerPlus','exportedAt',payload['exportedAt'].to_s)
+      root.set_attribute('ZamerPlus','roomId',payload['roomId'].to_s)
+      root.set_attribute('ZamerPlus','revisionId',payload['revisionId'].to_s)
+      root.set_attribute('ZamerPlus','placementVerified',payload.dig('placement','verified') == true)
 
       xf = build_transform(scan)
       openings = scan['openings'] || []
@@ -212,14 +211,141 @@ module ZamerPlus
         face.reverse! if face && face.normal.z < 0
       end
 
+      add_notes(root, payload, scan, xf, model)
+      root
+    end
+
+    def add_notes(root, payload, scan, xf, model)
+      notes = payload['notes'] || {}
+      return if notes.empty?
+      tag = model.layers['Zamer+ Notes'] || model.layers.add('Zamer+ Notes')
+      photo_tag = model.layers['Zamer+ Photos'] || model.layers.add('Zamer+ Photos')
+      photo_tag.visible = false
+      assets = File.join(Dir.home, 'Documents', 'ZamerPlus', 'Assets')
+      FileUtils.mkdir_p(assets)
+      walls = scan['walls'] || []
+      notes.each do |id, value|
+        next unless value.is_a?(Hash)
+        element_wall = walls.find { |w| w['id'].to_s == id.to_s }
+        opening = (scan['openings'] || []).find { |o| o['id'].to_s == id.to_s }
+        element_wall ||= walls.find { |w| w['id'].to_s == opening['parentId'].to_s } if opening
+        f = element_wall ? wall_frame(scan, element_wall, xf) : nil
+        xy = f ? f[:a] : [0,0]
+        label = value['label'].to_s[0,80]
+        text = value['text'].to_s[0,2500]
+        root.set_attribute('ZamerPlus','note_'+id.to_s[0,80],JSON.generate({'label'=>label,'text'=>text}))
+        unless text.empty?
+          t = root.entities.add_text("#{label}: #{text}", p3(xy[0],xy[1], f ? f[:h]+250 : 3000))
+          t.layer = tag if t
+        end
+        photo = value['photo'].to_s
+        next unless photo.start_with?('data:image/jpeg;base64,') && photo.bytesize <= 240000
+        begin
+          data = Base64.strict_decode64(photo.split(',',2)[1])
+          next if data.bytesize > 180000
+          filename = File.join(assets, Digest::SHA256.hexdigest(data)+'.jpg')
+          File.binwrite(filename,data) unless File.file?(filename)
+          root.set_attribute('ZamerPlus','photo_'+id.to_s[0,80],filename)
+          img = root.entities.add_image(filename,p3(xy[0],xy[1], f ? f[:h]+450 : 3500),450.mm)
+          img.layer = photo_tag if img
+        rescue => e
+          root.set_attribute('ZamerPlus','photo_error_'+id.to_s[0,80],e.message)
+        end
+      end
+    end
+
+    def import_payload(payload, source = 'manual', silent = false)
+      kind = payload['format']
+      raise 'Not a Zamer+ JSON file' unless ['zamerplus-sketchup','zamerplus-project'].include?(kind)
+      model = Sketchup.active_model
+      model.start_operation('Import Zamer+ LiDAR', true)
+      if kind == 'zamerplus-project'
+        rooms = payload['rooms'] || []
+        raise 'Project has no rooms' if rooms.empty?
+        parent = model.active_entities.add_group
+        parent.name = payload['projectName'].to_s
+        parent.set_attribute('ZamerPlus','projectId',payload['projectId'].to_s)
+        rooms.each do |room|
+          part = room.merge('projectName' => payload['projectName'], 'exportedAt' => payload['exportedAt'])
+          g = import_room(part, model, parent, source)
+          pose = room['placement'] || {}
+          x = n(pose['xMm']); y = n(pose['yMm'])
+          angle = n(pose['rotationDeg']).degrees
+          g.transformation = Geom::Transformation.translation([x.mm,y.mm,0]) * Geom::Transformation.rotation(ORIGIN,Z_AXIS,angle)
+        end
+        result = parent
+      else
+        result = import_room(payload, model, nil, source)
+      end
       model.commit_operation
-      model.active_view.zoom(root)
-      UI.messagebox("Zamer+ imported: #{walls.length} walls")
-      true
+      model.active_view.zoom(result)
+      UI.messagebox('Zamer+ imported successfully') unless silent
+      result
     rescue => e
       model.abort_operation if defined?(model) && model
-      UI.messagebox("Zamer+ import error:\n#{e.message}")
-      false
+      UI.messagebox("Zamer+ import error:\n#{e.message}") unless silent
+      raise if silent
+      nil
+    end
+
+    def import_file(path, silent = false)
+      payload = JSON.parse(File.read(path, encoding: 'UTF-8'))
+      import_payload(payload, path, silent)
+    rescue => e
+      UI.messagebox("Zamer+ import error:\n#{e.message}") unless silent
+      nil
+    end
+
+    def inbox_root
+      File.join(Dir.home,'Documents','ZamerPlus')
+    end
+
+    def pending_files
+      dir=File.join(inbox_root,'Inbox')
+      return [] unless Dir.exist?(dir)
+      Dir.glob(File.join(dir,'*.zamer.json')).sort
+    end
+
+    def empty_model?(model)
+      model.path.to_s.empty? && model.entities.empty? && (!model.respond_to?(:modified?) || !model.modified?)
+    end
+
+    def import_pending(force = false)
+      return if @busy
+      path=pending_files.first
+      return unless path
+      model=Sketchup.active_model
+      if !empty_model?(model)
+        return unless force
+        Sketchup.file_new
+        model=Sketchup.active_model
+        return unless model.path.to_s.empty? && model.entities.empty?
+      end
+      @busy=true
+      result=import_file(path,true)
+      raise 'Cannot import pending Zamer+ scan' unless result
+      output=File.join(inbox_root,'Models')
+      FileUtils.mkdir_p(output)
+      base=File.basename(path,'.zamer.json')
+      destination=File.join(output,base+'.skp')
+      raise 'SketchUp did not save the new model' unless model.save(destination)
+      completed=File.join(inbox_root,'Processed')
+      FileUtils.mkdir_p(completed)
+      FileUtils.mv(path,File.join(completed,File.basename(path)))
+      UI.messagebox('Замер+ — готово. Модель сохранена: '+destination) if force
+      destination
+    rescue => e
+      FileUtils.mkdir_p(File.join(inbox_root,'Failed'))
+      File.write(File.join(inbox_root,'Failed',File.basename(path)+'.txt'),e.message) if path
+      FileUtils.mv(path,File.join(inbox_root,'Failed',File.basename(path))) if path && File.file?(path)
+      UI.messagebox('Замер+ — ошибка импорта: '+e.message) if force
+      nil
+    ensure
+      @busy=false
+    end
+
+    def inbox_status
+      'В очереди: '+pending_files.length.to_s+' · папка '+File.join(inbox_root,'Inbox')
     end
 
     unless file_loaded?(__FILE__)
@@ -227,6 +353,9 @@ module ZamerPlus
         path=UI.openpanel('Import Zamer+ JSON', nil, 'JSON Files|*.json;*.zamer.json||')
         import_file(path) if path
       end
+      UI.menu('Extensions').add_item('Zamer+ — Импортировать входящий скан в новую модель') { import_pending(true) }
+      UI.menu('Extensions').add_item('Zamer+ — Очередь сканов') { UI.messagebox(inbox_status) }
+      UI.start_timer(4.0,true) { import_pending(false) }
       file_loaded(__FILE__)
     end
   end
