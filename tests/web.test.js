@@ -1,0 +1,25 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const html=fs.readFileSync(require('node:path').resolve(__dirname,'../index.html'),'utf8');
+const all=html.split('<script>').at(-1).split('</script>')[0];
+const code=all.slice(0,all.indexOf("$('#pcIp').value="));
+const ctx={console,crypto:require('node:crypto').webcrypto,localStorage:{getItem:()=>null,setItem:()=>{}},sessionStorage:{getItem:()=>null,setItem:()=>{}},confirm:()=>true,prompt:()=> '1',Date,Math,TextEncoder,btoa,atob};
+vm.createContext(ctx);vm.runInContext(code,ctx);vm.runInContext("render=()=>{};toast=()=>{}",ctx);
+vm.runInContext(`
+let walls=[{id:'w1',widthMm:4000,heightMm:2700,x1Mm:0,z1Mm:0,x2Mm:4000,z2Mm:0},{id:'w2',widthMm:3000,heightMm:2700,x1Mm:4000,z1Mm:0,x2Mm:4000,z2Mm:3000},{id:'w3',widthMm:4000,heightMm:2700,x1Mm:4000,z1Mm:3000,x2Mm:0,z2Mm:3000},{id:'w4',widthMm:3000,heightMm:2700,x1Mm:0,z1Mm:3000,x2Mm:0,z2Mm:0}];
+let s={heightMm:2700,walls,openings:[{id:'d1',type:'door',parentId:'w1',widthMm:900,heightMm:2100,offsetMm:700,bottomMm:0}],floorPolygon:[{xMm:0,zMm:0},{xMm:4000,zMm:0},{xMm:4000,zMm:3000},{xMm:0,zMm:3000}]};
+let r1={id:'r1',name:'Прихожая',scan:s,edits:{walls:{w1:{widthMm:4050}},openings:{},baseWallId:null,rotationQuarterTurns:0,reverseBase:false},updatedAt:123};
+let r2={id:'r2',name:'Спальня',scan:JSON.parse(JSON.stringify(s)),updatedAt:124};
+let project={id:'p',name:'Обмер',rooms:[r1,r2]};
+state.projects=[project];state.activeProjectId='p';
+let payload=roomPayload(project,r1);
+if(payload.scan.walls[0].widthMm!==4050||r1.scan.walls[0].widthMm!==4000)throw Error('original scan was changed');
+let pair=projectPayload(project);
+if(pair.rooms.length!==2||pair.rooms[1].placement.xMm<=pair.rooms[0].placement.xMm+4000)throw Error('rooms overlap');
+if(!pair.rooms.every(r=>r.placement.verified===false))throw Error('unverified placement improperly marked');
+let check=analyzeScan(s);if(check.level!=='good')throw Error(JSON.stringify(check));
+let h=buildDAE(s);if(!h.includes('meter="0.001"')||!h.includes('Z_UP')||!h.includes('floor_1'))throw Error('DAE regression');
+pushHistory(r1,'before edit');r1.scan=null;showHistory('p','r1');
+if(!r1.scan?.walls?.length)throw Error('history restore failed');
+console.log('PASS: raw scan preserved, effective corrections applied, rooms separated, QA, DAE, version restore');
+`,ctx);
