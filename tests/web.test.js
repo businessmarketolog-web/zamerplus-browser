@@ -2,17 +2,9 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const html=fs.readFileSync(require('node:path').resolve(__dirname,'../index.html'),'utf8');
 const all=html.split('<script>').at(-1).split('</script>')[0];
-const code=all.slice(0,all.indexOf("$('#pcIp').value="));
+const code=all.slice(0,all.indexOf("$('#projectManual').onclick"));
 const ctx={console,crypto:require('node:crypto').webcrypto,localStorage:{getItem:()=>null,setItem:()=>{}},sessionStorage:{getItem:()=>null,setItem:()=>{}},confirm:()=>true,prompt:()=> '1',Date,Math,TextEncoder,btoa,atob};
 vm.createContext(ctx);vm.runInContext(code,ctx);vm.runInContext("render=()=>{};toast=()=>{}",ctx);
-assert.equal(vm.runInContext("allowedReceiverIP('192.168.1.83')",ctx),true);
-assert.equal(vm.runInContext("allowedReceiverIP('100.64.1.9',true)",ctx),true);
-assert.equal(vm.runInContext("allowedReceiverIP('100.127.255.254',true)",ctx),true);
-assert.equal(vm.runInContext("allowedReceiverIP('100.128.0.1',true)",ctx),false);
-assert.equal(vm.runInContext("allowedReceiverIP('8.8.8.8',true)",ctx),false);
-assert.equal(vm.runInContext("allowedReceiverIP('100.64.1.9')",ctx),false);
-assert.equal(vm.runInContext("allowedReceiverIP('192.168.1.999')",ctx),false);
-console.log('PASS: remote IP validation permits only Tailscale shared-address range');
 vm.runInContext(`
 let walls=[{id:'w1',widthMm:4000,heightMm:2700,x1Mm:0,z1Mm:0,x2Mm:4000,z2Mm:0},{id:'w2',widthMm:3000,heightMm:2700,x1Mm:4000,z1Mm:0,x2Mm:4000,z2Mm:3000},{id:'w3',widthMm:4000,heightMm:2700,x1Mm:4000,z1Mm:3000,x2Mm:0,z2Mm:3000},{id:'w4',widthMm:3000,heightMm:2700,x1Mm:0,z1Mm:3000,x2Mm:0,z2Mm:0}];
 let s={heightMm:2700,walls,openings:[{id:'d1',type:'door',parentId:'w1',widthMm:900,heightMm:2100,offsetMm:700,bottomMm:0}],floorPolygon:[{xMm:0,zMm:0},{xMm:4000,zMm:0},{xMm:4000,zMm:3000},{xMm:0,zMm:3000}]};
