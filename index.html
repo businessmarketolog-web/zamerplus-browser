@@ -421,7 +421,7 @@ function deleteRoom(projectId,roomId){
 function deleteScan(projectId,roomId){
   let r=roomByIds(projectId,roomId);if(!r?.scan)return;
   if(!confirm('Удалить LiDAR‑скан комнаты «'+r.name+'»?'))return;
-  r.scan=null;r.updatedAt=Date.now();save();render();toast('LiDAR‑скан удалён');
+  pushHistory(r,'До удаления LiDAR-скана');r.scan=null;r.updatedAt=Date.now();save();render();toast('Скан удалён. Можно восстановить через историю');
 }
 
 function createProject(){
