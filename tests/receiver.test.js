@@ -1,9 +1,19 @@
 'use strict';
 const assert=require('node:assert/strict');
 const fs=require('node:fs');const path=require('node:path');const os=require('node:os');const {spawn}=require('node:child_process');
+const receiverSource=fs.readFileSync(path.resolve(__dirname,'../desktop-receiver/receiver.js'),'utf8');
+const helperCode=receiverSource.slice(receiverSource.indexOf('function octets('),receiverSource.indexOf('const homeBind='));
+const vm=require('node:vm');
+const isTail=vm.runInNewContext(helperCode+'; tailscaleIP');
+assert.equal(isTail('100.64.1.12'),true);
+assert.equal(isTail('100.127.254.250'),true);
+assert.equal(isTail('100.128.0.1'),false);
+assert.equal(isTail('192.168.1.83'),false);
+assert.equal(isTail('100.64.999.1'),false);
+console.log('PASS: Tailscale peer address validation');
 (async()=>{
   const home=fs.mkdtempSync(path.join(os.tmpdir(),'zp-test-'));
-  const child=spawn(process.execPath,[path.resolve(__dirname,'../desktop-receiver/receiver.js')],{env:{...process.env,HOME:home},stdio:'ignore'});
+  const child=spawn(process.execPath,[path.resolve(__dirname,'../desktop-receiver/receiver.js')],{env:{...process.env,HOME:home,ZAMER_BIND_IP:'127.0.0.1'},stdio:'ignore'});
   try{
     const conf=path.join(home,'Documents','ZamerPlus','receiver-config.json');
     for(let i=0;i<60&&!fs.existsSync(conf);i++)await new Promise(r=>setTimeout(r,100));
