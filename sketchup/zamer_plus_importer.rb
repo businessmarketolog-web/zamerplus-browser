@@ -5,8 +5,8 @@ require 'extensions.rb'
 module ZamerPlus
   unless file_loaded?(__FILE__)
     ext = SketchupExtension.new('Zamer+ Importer', 'zamer_plus_importer/main')
-    ext.description = 'Imports room/project JSON, keeps incoming LAN scans in a safe queue, and creates native geometry.'
-    ext.version = '1.1.0'
+    ext.description = 'Imports manually selected Zamer+ room/project JSON files as native SketchUp geometry.'
+    ext.version = '1.2.0'
     ext.creator = 'Zamer+'
     Sketchup.register_extension(ext, true)
     file_loaded(__FILE__)
